@@ -24,8 +24,6 @@ Param
 [ValidateNotNull()]
 $Credential = [System.Management.Automation.PSCredential]::Empty
 )
-$Computer
-$Credential
 if(($null -eq $Computer -or $Computer -eq "") -and ($Credential -eq $([System.Management.Automation.PSCredential]::Empty) -or $Credential -eq "") ){
     (Invoke-WebRequest http://api.ipify.org -UseBasicParsing).content}
 
