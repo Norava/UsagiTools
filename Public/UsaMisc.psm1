@@ -316,14 +316,14 @@ if($Module -contains "AzureAD"){
     usainstallModule -modulerequested "AzureAD" -doupdate $Update
     }
 if($Module -contains "ExchangeOnline"){
-    usainstallkModule -modulerequested "ExchangeOnlineManagement" -doupdate $Update
+    usainstallModule -modulerequested "ExchangeOnlineManagement" -doupdate $Update
     }
 if($Module -contains "MSOnline"){
     usainstallModule -modulerequested "MSOnline" -doupdate $Update
     }
 
 if($Module -contains "SharePoint"){
-    usaisntallModule -modulerequested "Microsoft.Online.SharePoint.PowerShell" -doupdate $Update
+    usainstallModule -modulerequested "Microsoft.Online.SharePoint.PowerShell" -doupdate $Update
     }
 if($Module -contains "SharePointPnP"){
     $PNPinstalled = Get-Module "PnP.PowerShell"
@@ -335,7 +335,7 @@ if($Module -contains "SharePointPnP"){
     elseif($null -ne $PNPinstalled -and $PNPinstalled -ne ""){Write-Host "SharePointPnP Module already installed, Skipping" }
     }
 if($Module -contains "Teams"){
-    usainstatllModule -modulerequested "MicrosoftTeams" -doupdate $Update
+    usainstallModule -modulerequested "MicrosoftTeams" -doupdate $Update
     }
 }
 
