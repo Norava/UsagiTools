@@ -66,7 +66,7 @@ Param
 
         
 #Login without MFA
-    if($Module -contains "AzureAD"){
+    if($Service -contains "AzureAD"){
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "AzureAD" -moduleset O365}
         until($ModImport -le 1)
@@ -82,7 +82,7 @@ Param
             Write-Host "Please try installing the AzureAD Module later."
             }
         }
-    if($Module -contains "ExchangeOnline"){        
+    if($Service -contains "ExchangeOnline"){        
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "ExchangeOnlineManagement"  -moduleset O365}
         until($ModImport -le 1)
@@ -122,7 +122,7 @@ Param
     }
 
 
-    if($Module -contains "MSOnline"){
+    if($Service -contains "MSOnline"){
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "MSOnline" -moduleset O365}
         until($ModImport -le 1)
@@ -139,7 +139,7 @@ Param
             }
         }
 
-    if($Module -contains "SharePoint" -and $null -ne $SharepointHostName -and $SharepointHostName -ne ""){
+    if($Service -contains "SharePoint" -and $null -ne $SharepointHostName -and $SharepointHostName -ne ""){
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "Microsoft.Online.SharePoint.PowerShell" -moduleset O365}
         until($ModImport -le 1)
@@ -178,7 +178,7 @@ Param
             }
         }
     }
-    if($Module -contains "SharePointPnP" -and $null -ne $SharepointPNPLibraryURI -and $SharepointPNPLibraryURI -ne ""){
+    if($Service -contains "SharePointPnP" -and $null -ne $SharepointPNPLibraryURI -and $SharepointPNPLibraryURI -ne ""){
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "PnP.Powershell" -moduleset O365}
         until($ModImport -le 1)
@@ -216,7 +216,7 @@ Param
             }
         }
     }
-    if($Module -contains "SecAndCompCenter"){        
+    if($Service -contains "SecAndCompCenter"){        
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "ExchangeOnlineManagement"  -moduleset O365}
         until($ModImport -le 1)
@@ -254,7 +254,7 @@ Param
             }
         }
     }      
-    if($Module -contains "Teams"){
+    if($Service -contains "Teams"){
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "MicrosoftTeams" -moduleset O365}
         until($ModImport -le 1)
