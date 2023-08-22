@@ -11,9 +11,9 @@ function Get-UsaPublicIP{
     .EXAMPLE
         PS> Invoke-WebRequest
     .EXAMPLE
-        PS> Get-PublicIP -Computer Srv-DC1.contoso.loc
+        PS> Get-UsaPublicIP -Computer Srv-DC1.contoso.loc
     .EXAMPLE
-        PS> Get-PublicIP -Computer Srv-DC1.Contoso.loc -Credential $(Get-Credential) 
+        PS> Get-UsaPublicIP -Computer Srv-DC1.Contoso.loc -Credential $(Get-Credential) 
     .VERSION
     1.0.0
 #>
@@ -24,7 +24,7 @@ Param
 [ValidateNotNull()]
 $Credential = [System.Management.Automation.PSCredential]::Empty
 )
-if($null -eq $Computer -and $Credential -eq $([System.Management.Automation.PSCredential]::Empty) ){
+if(($null -eq $Computer -or $Computer -eq "") -and ($Credential -eq $([System.Management.Automation.PSCredential]::Empty) -or $Credential -eq "") ){
     (Invoke-WebRequest http://api.ipify.org -UseBasicParsing).content}
 
 elseif($null -ne $Computer -and $Credential -eq $([System.Management.Automation.PSCredential]::Empty) ){
