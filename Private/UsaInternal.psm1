@@ -27,7 +27,9 @@
                 write-host "Module $modulerequested not found, Skipping"
                 return 0}
             }
-        elseif($null -ne $modinstalled -and $modinstalled -ne ""){Import-Module $modulerequested }
+        elseif($null -ne $modinstalled -and $modinstalled -ne ""){
+            Import-Module $modulerequested
+            return 1 }
         }
 
     function usainstallModule{
