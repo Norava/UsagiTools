@@ -41,15 +41,15 @@ elseif($null -ne $Computer -and $Credential -ne $([System.Management.Automation.
 
 
 function Login-UsaOffice365Services{
-#SecAndCompCenter is seperate login self FYI SecAndCompCenter
+#SecAndCompCenter is seperate login self FYI
 Param
 ( 
-    [ValidateSet('AzureAD','ExchangeOnline','MSOnline','SharePoint','SharePointPnP','SecAndCompCenter','Teams')]
+    [ValidateSet("AzureAD","ExchangeOnline","MSOnline","SharePoint","SecAndCompCenter","SharePointPnP","Teams")]
     [string[]]
-        $Service=("AzureAD","ExchangeOnline","MSOnline",'SharePoint','SecAndCompCenter','SharePointPnP','Teams'),
-    [ValidateSet('AzureCloud','AzureChinaCloud','AzureGermanyCloud','AzureUSGovernment')]
+        $Service=("AzureAD","ExchangeOnline","MSOnline","SharePoint","SecAndCompCenter","SharePointPnP","Teams"),
+    [ValidateSet("AzureCloud","AzureChinaCloud","AzureGermanyCloud","AzureUSGovernment")]
     [string[]]
-    $AzureEnvironmentName = "AzureCloud",
+        $AzureEnvironmentName = "AzureCloud",
 
     [System.Management.Automation.PSCredential]
     [ValidateNotNull()]
@@ -75,7 +75,7 @@ Param
                 Connect-AzureAD -Credential $Credential -AzureEnvironmentName $AzureEnvironmentName
                 }
             else{
-                Connect-AzureAD -AzureEnvironmentName $AzureEnvironmentName -
+                Connect-AzureAD -AzureEnvironmentName $AzureEnvironmentName
                 }
             }
         elseif($ModImport -eq 0){
@@ -287,8 +287,8 @@ function Install-UsaOffice365Modules{
 
 Param
 ( 
-    [ValidateSet('AzureAD','ExchangeOnline',"MSOnline",'SharePoint','SharePointPnP','Teams')]
-    [string[]]$Module=("AzureAD","ExchangeOnline","MSOnline",'SharePoint','SharePointPnP','Teams'),
+    [ValidateSet("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","Teams")]
+    [string[]]$Module=("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","Teams"),
     [switch]$Update
 
 )
