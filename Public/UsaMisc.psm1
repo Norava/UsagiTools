@@ -70,6 +70,8 @@ Param
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "AzureAD" -moduleset O365}
         until($ModImport -le 1)
+
+        Write-host "Attempting AzureAD Login"
         if($ModImport -eq 1){
             if($Interactive -eq $false -or $null -eq $Interactive){
                 Connect-AzureAD -Credential $Credential -AzureEnvironmentName $AzureEnvironmentName
@@ -86,6 +88,8 @@ Param
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "ExchangeOnlineManagement"  -moduleset O365}
         until($ModImport -le 1)
+
+        Write-host "Attempting Exchange Online Login"
         if($ModImport -eq 1){
             if($Interactive -eq $false -or $null -eq $Interactive){
                 if($AzureEnvironmentName -eq "AzureCloud"){
@@ -126,6 +130,8 @@ Param
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "MSOnline" -moduleset O365}
         until($ModImport -le 1)
+
+        Write-host "Attempting MSOL Login"
         if($ModImport -eq 1){
             if($Interactive -eq $false -or $null -eq $Interactive){
                 Connect-MsolService -Credential $Credential -AzureEnvironment $AzureEnvironmentName
@@ -143,6 +149,9 @@ Param
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "Microsoft.Online.SharePoint.PowerShell" -moduleset O365}
         until($ModImport -le 1)
+
+        Write-host "Attempting Sharepoint Login"
+
         if($ModImport -eq 1){
             if($Interactive -eq $false -or $null -eq $Interactive){
                 if($AzureEnvironmentName -eq "AzureCloud"){
@@ -173,7 +182,7 @@ Param
                     }
 
             }
-        elseif($ModImport -eq 0){
+        if($ModImport -eq 0){
             Write-Host "Please try installing the SharePoint Module later."
             }
         }
@@ -182,6 +191,9 @@ Param
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "PnP.Powershell" -moduleset O365}
         until($ModImport -le 1)
+
+        Write-host "Attempting Sharepoint PNP Login to $SharepointPNPLibraryURI"
+
         if($ModImport -eq 1){
             if($Interactive -eq $false -or $null -eq $Interactive){
                 if($AzureEnvironmentName -eq "AzureCloud"){
@@ -211,7 +223,7 @@ Param
                     Connect-PnPOnline -Url $SharepointPNPLibraryURI -Interactive -region USGovernmentHigh
                     }            
             }
-        elseif($ModImport -eq 0){
+        if($ModImport -eq 0){
             Write-Host "Please try installing the SharePointPnP Module later."
             }
         }
@@ -220,6 +232,8 @@ Param
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "ExchangeOnlineManagement"  -moduleset O365}
         until($ModImport -le 1)
+
+        Write-host "Attempting Security and Compliance Center Login"
         if($ModImport -eq 1){
             if($Interactive -eq $false -or $null -eq $Interactive){
                 if($AzureEnvironmentName -eq "AzureCloud"){
@@ -249,7 +263,7 @@ Param
                     Connect-IPPSSession  -ConnectionUri "https://ps.compliance.protection.office365.us/powershell-liveid/"
                 }
             }
-        elseif($ModImport -eq 0){
+        if($ModImport -eq 0){
             Write-Host "Please try installing the ExchangeOnlineManagement Module later."
             }
         }
@@ -258,6 +272,7 @@ Param
         $ModImport = $null
         do{$ModImport = usamoduleimport -modulerequested "MicrosoftTeams" -moduleset O365}
         until($ModImport -le 1)
+        Write-host "Attempting Teams Login to $SharepointPNPLibraryURI"
         if($ModImport -eq 1){
             if($AzureEnvironmentName -eq "AzureCloud"){
                 Connect-MicrosoftTeams -Credential $Credential
@@ -271,7 +286,7 @@ Param
             if($AzureEnvironmentName -eq "AzureUSGovernment"){
                 Connect-MicrosoftTeams -Credential $Credential -TeamsEnvironmentName TeamsGCCH
                 }            }
-        elseif($ModImport -eq 0){
+        if($ModImport -eq 0){
             Write-Host "Please try installing the MicrosoftTeams Module later."
             }
         }
@@ -303,10 +318,10 @@ Param
             if($IsAdmin -eq $true){Install-Module $modulerequested}
             else{Install-Module $modulerequested -Scope CurrentUser}
             }
-        elseif($null -ne $modinstalled -and $modinstalled -ne "" -and $Update -eq $true){
+        if($null -ne $modinstalled -and $modinstalled -ne "" -and $Update -eq $true){
             Update-Module $modulerequested 
             }
-        elseif($null -ne $modinstalled -and $modinstalled -ne ""){
+        if($null -ne $modinstalled -and $modinstalled -ne ""){
             Write-Host "$modulerequested Module already installed, Skipping" 
             }
         }
@@ -331,8 +346,8 @@ if($Module -contains "SharePointPnP"){
         if($IsAdmin -eq $True){Install-Module -Name "PnP.PowerShell" -RequiredVersion 1.12.0 -Force -AllowClobber}
         if($IsAdmin -eq $False){Install-Module -Name "PnP.PowerShell" -RequiredVersion 1.12.0 -Force -AllowClobber -Scope CurrentUser}
         }
-    elseif($null -ne $PNPinstalled -and $PNPinstalled -ne "" -and $Update -eq $true){Update-Module "PnP.PowerShell" -RequiredVersion 1.12.0 }
-    elseif($null -ne $PNPinstalled -and $PNPinstalled -ne ""){Write-Host "SharePointPnP Module already installed, Skipping" }
+    if($null -ne $PNPinstalled -and $PNPinstalled -ne "" -and $Update -eq $true){Update-Module "PnP.PowerShell" -RequiredVersion 1.12.0 }
+    if($null -ne $PNPinstalled -and $PNPinstalled -ne ""){Write-Host "SharePointPnP Module already installed, Skipping" }
     }
 if($Module -contains "Teams"){
     usainstallModule -modulerequested "MicrosoftTeams" -doupdate $Update
