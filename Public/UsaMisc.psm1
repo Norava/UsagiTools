@@ -119,7 +119,7 @@ Param
                     Connect-ExchangeOnline -ExchangeEnvironmentName O365USGovGCCHigh
                 }
             }
-        elseif($ModImport -eq 0){
+        if($ModImport -eq 0){
             Write-Host "Please try installing the ExchangeOnlineManagement Module later."
             }
         }
@@ -273,19 +273,40 @@ Param
         do{$ModImport = usamoduleimport -modulerequested "MicrosoftTeams" -moduleset O365}
         until($ModImport -le 1)
         Write-host "Attempting Teams Login to $SharepointPNPLibraryURI"
+
+
         if($ModImport -eq 1){
-            if($AzureEnvironmentName -eq "AzureCloud"){
-                Connect-MicrosoftTeams -Credential $Credential
-                }
-            if($AzureEnvironmentName -eq "AzureChinaCloud"){
-                Connect-MicrosoftTeams -Credential $Credential -TeamsEnvironmentName TeamsChina
-                }
-            if($AzureEnvironmentName -eq "AzureGermanyCloud"){
-                Write-Warning "Cannot connect to Teams in AzureGermanyCloud as no tenant exists, see https://learn.microsoft.com/en-us/powershell/module/teams/connect-microsoftteams?view=teams-ps#-teamsenvironmentname for more info"
-                }
-            if($AzureEnvironmentName -eq "AzureUSGovernment"){
-                Connect-MicrosoftTeams -Credential $Credential -TeamsEnvironmentName TeamsGCCH
-                }            }
+            if($Interactive -eq $false -or $null -eq $Interactive){
+
+                if($AzureEnvironmentName -eq "AzureCloud"){
+                    Connect-MicrosoftTeams -Credential $Credential
+                    }
+                if($AzureEnvironmentName -eq "AzureChinaCloud"){
+                    Connect-MicrosoftTeams -Credential $Credential -TeamsEnvironmentName TeamsChina
+                    }
+                if($AzureEnvironmentName -eq "AzureGermanyCloud"){
+                    Write-Warning "Cannot connect to Teams in AzureGermanyCloud as no tenant exists, see https://learn.microsoft.com/en-us/powershell/module/teams/connect-microsoftteams?view=teams-ps#-teamsenvironmentname for more info"
+                    }
+                if($AzureEnvironmentName -eq "AzureUSGovernment"){
+                    Connect-MicrosoftTeams -Credential $Credential -TeamsEnvironmentName TeamsGCCH
+                    }            
+              } 
+            else{
+                if($AzureEnvironmentName -eq "AzureCloud"){
+                    Connect-MicrosoftTeams
+                    }
+                if($AzureEnvironmentName -eq "AzureChinaCloud"){
+                    Connect-MicrosoftTeams -TeamsEnvironmentName TeamsChina
+                    }
+                if($AzureEnvironmentName -eq "AzureGermanyCloud"){
+                    Write-Warning "Cannot connect to Teams in AzureGermanyCloud as no tenant exists, see https://learn.microsoft.com/en-us/powershell/module/teams/connect-microsoftteams?view=teams-ps#-teamsenvironmentname for more info"
+                    }
+                if($AzureEnvironmentName -eq "AzureUSGovernment"){
+                    Connect-MicrosoftTeams -TeamsEnvironmentName TeamsGCCH
+                    }            
+            } 
+        }
+
         if($ModImport -eq 0){
             Write-Host "Please try installing the MicrosoftTeams Module later."
             }

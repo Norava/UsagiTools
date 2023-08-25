@@ -9,6 +9,7 @@
         [string[]]
         $moduleset
 )
+        Write-Host "Attempting import of $modulerequested"
         $modinstalled = Get-InstalledModule $modulerequested
         if($null -eq $modinstalled -or $modinstalled -eq ""){
             $Choices = @("Yes","No")
