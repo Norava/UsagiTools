@@ -18,8 +18,8 @@ function usamoduleimport{
         If something special needs to be done to install, reroute to the appropriate function here
     .EXAMPLE
         PS> usamoduleimport -modulerequested ExchangeOnline -moduleset O365
-    .VERSION
-    1.0.0
+    .NOTES
+    Version 1.0.0
 #>
         Param
         (
@@ -74,8 +74,8 @@ function usamoduleimport{
         PS> usainstallModule -modulerequested ExchangeOnline
     .EXAMPLE
         PS> usainstallModule -modulerequested ExchangeOnline -doupdate
-    .VERSION
-    1.0.0
+    .NOTES
+    Version 1.0.0
 #>
         Param
         (
@@ -96,7 +96,7 @@ function usamoduleimport{
             }
         }
 #USAGI TOOLS IDENTITY MODULE
-#VERSION 1.0.0
+#VERSION 1.0.1
 #Various Powershell tools designed around Identity Provisioning / Management systems (Active Directory, Azure AD, Etc)
 
 function Set-UsaDynamicGroupMember{
@@ -146,8 +146,8 @@ function Set-UsaDynamicGroupMember{
     .EXAMPLE
         PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
 
-    .Version
-        1.0.0
+    .NOTES
+       Version 1.0.1
     #>
     [CmdletBinding(SupportsShouldProcess)]
     Param
@@ -343,8 +343,8 @@ function Add-UsaUserSendasGlobally{
     .EXAMPLE
         PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
 
-    .Version
-        1.0.0
+    .NOTES
+        VERSION 1.0.1
     #>
 
     param(
@@ -395,7 +395,7 @@ function Add-UsaUserSendasGlobally{
 }
 
 #USAGI TOOLS MISC MODULE
-#VERSION 1.0.0
+#VERSION 1.0.1
 #Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) Or otherwise misc functions
 
 function Get-UsaPublicIP{
@@ -408,8 +408,8 @@ function Get-UsaPublicIP{
         PS> Get-UsaPublicIP -Computer Srv-DC1.contoso.loc
     .EXAMPLE
         PS> Get-UsaPublicIP -Computer Srv-DC1.Contoso.loc -Credential $(Get-Credential)
-    .VERSION
-    1.0.0
+    .NOTES
+    Version 1.0.1
 #>
 Param
 (
@@ -462,8 +462,8 @@ function Connect-UsaOffice365Service{
         PS> Connect-UsaOffice365Service -Interactive -AzureEnvironmentName AzureGermanyCloud -SharepointHostName contoso-de
     .EXAMPLE
         PS> Connect-UsaOffice365Service -Interactive -Services -SharepointPNPLibraryURI https://contoso.sharepoint.com/sites/AccountingFiles/default.aspx
-    .VERSION
-    1.0.0
+    .NOTES
+    Version 1.0.1
 #>
 
 [CmdletBinding(DefaultParameterSetName='noOptions')]
@@ -803,8 +803,8 @@ function Install-UsaOffice365Module{
         PS> Install-UsaOffice365Module -Module AzureAD
     .EXAMPLE
         PS> Install-UsaOffice365Module -Module AzureAD -Update
-    .VERSION
-    1.0.0
+    .NOTES
+     Version 1.0.1
 #>
 
 
@@ -861,8 +861,8 @@ function Test-UsaAdministrator  {
         Simple script to test if the current user is Admin, returns $true if the user is an admin
     .EXAMPLE
         PS> Test-UsaAdministrator
-    .VERSION
-    1.0.0
+    .NOTES
+      Version 1.0.1
 #>
     $user = [Security.Principal.WindowsIdentity]::GetCurrent();
     (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)

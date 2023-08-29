@@ -1,5 +1,5 @@
 ﻿#USAGI TOOLS MISC MODULE
-#VERSION 1.0.0
+#VERSION 1.0.1
 #Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) Or otherwise misc functions
 
 function Get-UsaPublicIP{
@@ -12,8 +12,8 @@ function Get-UsaPublicIP{
         PS> Get-UsaPublicIP -Computer Srv-DC1.contoso.loc
     .EXAMPLE
         PS> Get-UsaPublicIP -Computer Srv-DC1.Contoso.loc -Credential $(Get-Credential)
-    .VERSION
-    1.0.0
+    .NOTES
+    Version 1.0.1
 #>
 Param
 (
@@ -66,8 +66,8 @@ function Connect-UsaOffice365Service{
         PS> Connect-UsaOffice365Service -Interactive -AzureEnvironmentName AzureGermanyCloud -SharepointHostName contoso-de
     .EXAMPLE
         PS> Connect-UsaOffice365Service -Interactive -Services -SharepointPNPLibraryURI https://contoso.sharepoint.com/sites/AccountingFiles/default.aspx
-    .VERSION
-    1.0.0
+    .NOTES
+    Version 1.0.1
 #>
 
 [CmdletBinding(DefaultParameterSetName='noOptions')]
@@ -407,8 +407,8 @@ function Install-UsaOffice365Module{
         PS> Install-UsaOffice365Module -Module AzureAD
     .EXAMPLE
         PS> Install-UsaOffice365Module -Module AzureAD -Update
-    .VERSION
-    1.0.0
+    .NOTES
+     Version 1.0.1
 #>
 
 
@@ -465,8 +465,8 @@ function Test-UsaAdministrator  {
         Simple script to test if the current user is Admin, returns $true if the user is an admin
     .EXAMPLE
         PS> Test-UsaAdministrator
-    .VERSION
-    1.0.0
+    .NOTES
+      Version 1.0.1
 #>
     $user = [Security.Principal.WindowsIdentity]::GetCurrent();
     (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)

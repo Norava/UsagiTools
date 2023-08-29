@@ -11,8 +11,8 @@ function usamoduleimport{
         If something special needs to be done to install, reroute to the appropriate function here
     .EXAMPLE
         PS> usamoduleimport -modulerequested ExchangeOnline -moduleset O365
-    .VERSION
-    1.0.0
+    .NOTES
+    Version 1.0.0
 #>
         Param
         (
@@ -67,8 +67,8 @@ function usamoduleimport{
         PS> usainstallModule -modulerequested ExchangeOnline
     .EXAMPLE
         PS> usainstallModule -modulerequested ExchangeOnline -doupdate
-    .VERSION
-    1.0.0
+    .NOTES
+    Version 1.0.0
 #>
         Param
         (

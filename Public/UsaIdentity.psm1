@@ -1,5 +1,5 @@
 ﻿#USAGI TOOLS IDENTITY MODULE
-#VERSION 1.0.0
+#VERSION 1.0.1
 #Various Powershell tools designed around Identity Provisioning / Management systems (Active Directory, Azure AD, Etc)
 
 function Set-UsaDynamicGroupMember{
@@ -49,8 +49,8 @@ function Set-UsaDynamicGroupMember{
     .EXAMPLE
         PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
 
-    .Version
-        1.0.0
+    .NOTES
+       Version 1.0.1
     #>
     [CmdletBinding(SupportsShouldProcess)]
     Param
@@ -246,8 +246,8 @@ function Add-UsaUserSendasGlobally{
     .EXAMPLE
         PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
 
-    .Version
-        1.0.0
+    .NOTES
+        VERSION 1.0.1
     #>
 
     param(
