@@ -1,6 +1,6 @@
-﻿#USAGI TOOLS INT MODULE
-#VERSION 0.3.0
-#Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) (Expect slightly less professional comments here be monsters)
+﻿#USAGI TOOLS INTERNAL MODULE
+#VERSION 1.0.0
+#Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) (Expect slightly less professional comments in this section here be monsters)
 function usamoduleimport{
     <#
     .SYNOPSIS
@@ -10,7 +10,7 @@ function usamoduleimport{
     .PARAMETER moduleset
         If something special needs to be done to install, reroute to the appropriate function here
     .EXAMPLE
-        PS> usamoduleimport -modulerequested ExchangeOnline -moduleset O365 
+        PS> usamoduleimport -modulerequested ExchangeOnline -moduleset O365
     .VERSION
     1.0.0
 #>
@@ -21,29 +21,39 @@ function usamoduleimport{
         [string[]]
         $moduleset
 )
-        Write-Host "Attempting import of $modulerequested"
+        Write-Output "Attempting import of $modulerequested"
         $modinstalled = Get-InstalledModule $modulerequested
         if($null -eq $modinstalled -or $modinstalled -eq ""){
             $Choices = @("Yes","No")
             $installmod = $Host.UI.PromptForChoice("Install Module?","Module $modulerequested not found, proceed with installation?",$Choices,1)
             if($installmod -eq 0){
-                if($moduleset -eq "O365"){Install-UsaOffice365Modules -Module $modulerequested}
+            #If we want to install the module install based off the ModuleSet
+                if($moduleset -eq "O365"){
+                    Install-UsaOffice365Module -Module $modulerequested
+                }
+            #Attempt to import the newly Downloaded Module
                 try{
                     Import-Module $modulerequested
                 }
                 catch{
-                Write-Host $_.Exception.Message -ForegroundColor Red
-                return 2
+                    Write-Error $_.Exception.Message
+                    return 2
                 }
-                return 1}
-            else{
-                write-host "Module $modulerequested not found, Skipping"
-                return 0}
+            #Provided it works return sucess
+                return 1
             }
-        elseif($null -ne $modinstalled -and $modinstalled -ne ""){
-            Import-Module $modulerequested
-            return 1 }
+
+            #If we're cancelling the install when not found
+            else{
+                Write-Warning "Module $modulerequested not found, and user elected to not install Skipping"
+                return 0
+            }
         }
+        if($null -ne $modinstalled -and $modinstalled -ne ""){
+            Import-Module $modulerequested
+            return 1
+        }
+}
 
     function usainstallModule{
     <#
@@ -71,10 +81,10 @@ function usamoduleimport{
             if($IsAdmin -eq $true){Install-Module $modulerequested}
             else{Install-Module $modulerequested -Scope CurrentUser}
             }
-        elseif($null -ne $modinstalled -and $modinstalled -ne "" -and $doupdate -eq $true){
-            Update-Module $modulerequested 
+        if($null -ne $modinstalled -and $modinstalled -ne "" -and $doupdate -eq $true){
+            Update-Module $modulerequested
             }
-        elseif($null -ne $modinstalled -and $modinstalled -ne ""){
-            Write-Host "$modulerequested Module already installed, Skipping" 
+        if($null -ne $modinstalled -and $modinstalled -ne ""){
+            Write-Warning "$modulerequested Module already installed, Skipping"
             }
         }
