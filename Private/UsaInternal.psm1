@@ -1,7 +1,19 @@
 ﻿#USAGI TOOLS INT MODULE
 #VERSION 0.1.0
-#Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun)
-    function usamoduleimport{
+#Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) (Expect slightly less professional comments here be monsters)
+function usamoduleimport{
+    <#
+    .SYNOPSIS
+        Imports Modules and asks to install if it's missing, public module sets to be added as needed or until I somehow can have a required module magically be installed LOL
+    .PARAMETER modulerequested
+        what we want to import
+    .PARAMETER moduleset
+        If something special needs to be done to install, reroute to the appropriate function here
+    .EXAMPLE
+        PS> usamoduleimport -modulerequested ExchangeOnline -moduleset O365 
+    .VERSION
+    1.0.0
+#>
         Param
         (
         [string]$modulerequested,
@@ -34,6 +46,20 @@
         }
 
     function usainstallModule{
+    <#
+    .SYNOPSIS
+        Attempts to install a module as admin and installs locally if we don't have perms
+    .PARAMETER modulerequested
+        What we want to import
+    .PARAMETER doupdate
+        Do update-module rather than install-module
+    .EXAMPLE
+        PS> usainstallModule -modulerequested ExchangeOnline
+    .EXAMPLE
+        PS> usainstallModule -modulerequested ExchangeOnline -doupdate
+    .VERSION
+    1.0.0
+#>
         Param
         (
         [string]$modulerequested,

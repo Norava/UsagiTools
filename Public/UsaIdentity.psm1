@@ -189,6 +189,32 @@ Add-ADGroupMember -Identity $IdentityObject -Members $Table.ObjectGUID
     }
 
 function Add-UsaUserSendasGlobally{
+<#
+    .SYNOPSIS
+        Grants a User in Office 365 permission to send as ALL Licensed users. Good for global service accounts
+
+    .PARAMETER Trustee
+        Identity of user to gain full SendAs Rights
+
+    .PARAMETER Credentials
+        PSCredential Object of a NON MFA Admin to log into Office 365 with. If no credentials are provided will log in by default in interactive mode for MFA Login
+
+    .PARAMETER AzureEnvironmentName
+        Select Azure Environment to log into. Default is the normal AzureCloud environment, Alternative options are AzureChinaCloud, AzureGermanyCloud, and AzureUSGovernmentCloud. Options will select the same cloud as would be selected with Connect-AzureAD
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net -Credentials $(Get-Credential)
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
+
+    .Version
+        1.0.0
+    #>
+
     param(
     [string]$Trustee,
 
@@ -202,11 +228,14 @@ function Add-UsaUserSendasGlobally{
     $AzureEnvironmentName = "AzureCloud"
 
     )
+
+    #Non MFA Credential Login
     if($Credential -ne $([System.Management.Automation.PSCredential]::Empty) -and $null -ne $Credential){
-    Login-UsaOffice365Services -Credential $Credential -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
+        Login-UsaOffice365Services -Credential $Credential -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
     }
+    #MFA Login
     else{
-    Login-UsaOffice365Services -Interactive -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
+        Login-UsaOffice365Services -Interactive -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
     }
     [System.Collections.ArrayList]$Users = Get-MsolUser -All | ?{$_.IsLicensed -eq $True}
     $CurrentPerms = Get-RecipientPermission -Trustee $Trustee
