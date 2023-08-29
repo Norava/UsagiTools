@@ -1,5 +1,5 @@
 ﻿#USAGI TOOLS IDENTITY MODULE
-#VERSION 0.1
+#VERSION 0.2.0
 #Various Powershell tools designed around Identity Provisioning / Management systems (Active Directory, Azure AD, Etc)
 
 function Set-UsaDynamicGroupMembers{
@@ -259,3 +259,5 @@ function Add-UsaUserSendasGlobally{
     }
     $Users | %{Add-RecipientPermission -Identity $_.ObjectID -Trustee $Trustee -AccessRights SendAs  -Confirm:$false}
 }
+
+Export-ModuleMember -Function "*-*"
