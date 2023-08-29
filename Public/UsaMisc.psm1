@@ -1,5 +1,5 @@
 ﻿#USAGI TOOLS MISC MODULE
-#VERSION 0.1.0
+#VERSION 0.3.0
 #Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) Or otherwise misc functions
 
 function Get-UsaPublicIP{
@@ -459,4 +459,3 @@ function Test-UsaAdministrator  {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent();
     (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)  
 }
-Export-ModuleMember -Function "*-*"

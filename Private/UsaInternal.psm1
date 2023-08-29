@@ -1,5 +1,5 @@
 ﻿#USAGI TOOLS INT MODULE
-#VERSION 0.2.0
+#VERSION 0.3.0
 #Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) (Expect slightly less professional comments here be monsters)
 function usamoduleimport{
     <#
@@ -78,4 +78,3 @@ function usamoduleimport{
             Write-Host "$modulerequested Module already installed, Skipping" 
             }
         }
-Export-ModuleMember -Function "*-*"
