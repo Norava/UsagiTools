@@ -26,8 +26,52 @@ Identity
 		.EXAMPLE
 			PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
 
+	Set-UsaDynamicGroupMember
 
+		.SYNOPSIS
+			Sets the members of a group based off various attributes, designed to be piped into a scheduled task with a foreach-object loop and WILL PROCEED WITH EMPTY VARIABLES
 
+		.PARAMETER Identity
+			Identity of group to set
+
+		.PARAMETER Computers
+			List of computers to manually add to group
+
+		.PARAMETER ComputerOU
+			OU to take all Commputer AD Objects from in DN format
+
+		.PARAMETER Debug
+			Enables errors and pauses script before applying changes to allow review of users before application
+
+		.PARAMETER Group
+			List of Distribution Lists or Security Groups to nest in said group
+
+		 .PARAMETER OutputPath
+			Path to output list of users exported, will not export if no path is provided
+
+		.PARAMETER SearchString
+			Manual search string for ADObejcts to add
+
+		.PARAMETER Users
+			List of users to directly add to group
+
+		 .PARAMETER UserOU
+			OU to take all AD User Objects from in DN format
+
+		.EXAMPLE
+			PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
+
+		.EXAMPLE
+			PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
+
+		.EXAMPLE
+			PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
+
+		.EXAMPLE
+			PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
+
+		.EXAMPLE
+			PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
 
   
 Misc
