@@ -164,7 +164,7 @@ Misc
     .PARAMETER Credential
         Credentials to use with Computer Flag
     .PARAMETER Count
-        How many times to run test, do Unlimited for a continuous ping
+        How many times to run test, Outputs to log when done
     .PARAMETER SourceIP
         Provides a source IP to run tests against
     .PARAMETER Internal
