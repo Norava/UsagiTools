@@ -1,6 +1,90 @@
 ﻿#USAGI TOOLS IDENTITY MODULE
-#VERSION 1.0.1
+#VERSION 1.0.2
 #Various Powershell tools designed around Identity Provisioning / Management systems (Active Directory, Azure AD, Etc)
+#Module Event # 2000-2999
+
+
+function Add-UsaUserSendasGlobally{
+<#
+    .SYNOPSIS
+        Grants a User in Office 365 permission to send as ALL Licensed users. Good for global service accounts as a workaround for Applications that require it
+
+    .PARAMETER Trustee
+        Identity of user to gain full SendAs Rights
+
+    .PARAMETER Credentials
+        PSCredential Object of a NON MFA Admin to log into Office 365 with. If no credentials are provided will log in by default in interactive mode for MFA Login
+
+    .PARAMETER AzureEnvironmentName
+        Select Azure Environment to log into. Default is the normal AzureCloud environment, Alternative options are AzureChinaCloud, AzureGermanyCloud, and AzureUSGovernmentCloud. Options will select the same cloud as would be selected with Connect-AzureAD
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net -Credentials $(Get-Credential)
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
+
+    .NOTES
+        VERSION 1.0.2
+    #>
+
+    param(
+    [string]$Trustee,
+
+    [System.Management.Automation.PSCredential]
+    [ValidateNotNull()]
+    [Parameter(ParameterSetName='PSCredentialLogin')]
+        $Credential = [System.Management.Automation.PSCredential]::Empty,
+
+    [ValidateSet('AzureCloud','AzureChinaCloud','AzureGermanyCloud','AzureUSGovernment')]
+    [string[]]
+    $AzureEnvironmentName = "AzureCloud"
+
+    )
+
+    #Non MFA Credential Login
+    if($Credential -ne $([System.Management.Automation.PSCredential]::Empty) -and $null -ne $Credential){
+        Connect-UsaOffice365Service -Credential $Credential -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
+    }
+    #MFA Login
+    else{
+        Connect-UsaOffice365Service -Interactive -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
+    }
+
+    usawritelog  -Message "Gathering Users list, please wait" -LogLevel SuccessAudit -EventID 1000
+
+    [System.Collections.ArrayList]$Users = Get-MsolUser -All | Where-Object{$_.IsLicensed -eq $True}
+    $CurrentPerms = Get-RecipientPermission -Trustee $Trustee
+
+    #Take all users in CurrentPerms and remove them from the Users Object so we don't push duplicate permissions
+    usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Cleaning Permission Object"
+    $CurrentPerms | ForEach-Object{
+        #For each user check if it's in the Users Object locally and save that as a value
+        $usertoremove = $_.Identity
+        #Get the object from our $Users MSOnline based object if it exists, due to varying Identity vales checks  DisplayName, ObjectID, SamAccountName,  UserPrincipalName
+        $remove = $Users | Where-Object{$_.DisplayName -like "$usertoremove" -OR $_.ObjectID -eq "$usertoremove" -OR  $_.UserPrincipalName.Split('@')[0] -like $usertoremove -OR  $_.UserPrincipalName -like $usertoremove}
+        #Check if it's 1 object, if -batch is on and we get 2 just skip the user and log it
+        if($null -eq $remove){
+            usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove NOT FOUND"
+            #Put it on a log list if that's on
+        }
+        elseif($remove.count -eq 1){
+            $Users.Remove($remove) #Remove object from list
+        }
+        else{
+            usawritelog -LogLevel Warning -EventID 2002 -Message $("The following users were found but will not be removed from existing adds, expect errors
+            "+ $remove)
+        }
+    }
+
+    usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Adding permissions for " + $Trustee)
+    $Users | ForEach-Object{
+        Add-RecipientPermission -Identity $_.ObjectID -Trustee $Trustee -AccessRights SendAs  -Confirm:$false
+    }
+}
 
 function Set-UsaDynamicGroupMember{
     <#
@@ -50,7 +134,7 @@ function Set-UsaDynamicGroupMember{
         PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
 
     .NOTES
-       Version 1.0.1
+       Version 1.0.2
     #>
     [CmdletBinding(SupportsShouldProcess)]
     Param
@@ -84,7 +168,7 @@ function Set-UsaDynamicGroupMember{
     #Check that Identity group exists, if not terminate
     $IdentityObject = get-adgroup $Identity
     if($null -eq $IdentityObject -or $IdentityObject -eq ""){
-        Write-Error "NO GROUP NAMED $Identity FOUND, ENDING SCRIPT" -TargetObject $Identity -RecommendedAction "Check your target AD Group and try again" -Category InvalidArgument
+        usawritelog -LogLevel Error -EventID 2010 -Message "NO GROUP NAMED $Identity FOUND, ENDING SCRIPT" -RecommendedAction "Check your target AD Group and try again" -Category InvalidArgument
         break
     }
 
@@ -96,7 +180,7 @@ function Set-UsaDynamicGroupMember{
                 Get-ADOrganizationalUnit $_ | Out-Null
             }
             catch{
-                Write-Warning "An error occured validating a User OU:"
+                usawritelog -LogLevel Warning -EventID 2011 -Message "An error occured validating a User OU:"
                 Write-Error $_
                 break
             }
@@ -109,7 +193,7 @@ function Set-UsaDynamicGroupMember{
                 Get-ADOrganizationalUnit $_ | out-null
             }
             catch{
-                Write-Warning "An error occured validating a Computer OU:"
+                usawritelog -LogLevel Warning -EventID 2012 -Message "An error occured validating a Computer OU:"
                 Write-Error $_
                 break
             }
@@ -121,7 +205,7 @@ function Set-UsaDynamicGroupMember{
 
     #If UserOU is null skip
     if($null -eq $UsersOU -or $UsersOU -eq ""){
-        Write-Output "No User OU selected, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No User OU selected, Skipping"
     }
     #Else look up all User Objects in OU and add to baseobject
     else{
@@ -133,7 +217,7 @@ function Set-UsaDynamicGroupMember{
     }
     #If ComputerOU is null skip
     if($null -eq $ComputersOU -or $ComputersOU -eq ""){
-        Write-Output "No Computer OU selected, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Computer OU selected, Skipping"
     }
 
     #Else look up all Computer objects in OU and add to baseobject
@@ -146,7 +230,7 @@ function Set-UsaDynamicGroupMember{
     }
     #Add any manual Users and Computers
     if($null -eq $Users -or $Users -eq ""){
-        Write-Output "No Extra Users selected, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Extra Users selected, Skipping"
     }
     #Else look up all User Objects and add to baseobject
     else{
@@ -157,7 +241,7 @@ function Set-UsaDynamicGroupMember{
                 }
     }
     if($null -eq $Computers -or $Computers -eq ""){
-        Write-Output "No Extra Computers selected, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Extra Computers selected, Skipping"
     }
     #Else look up all User Objects and add to baseobject
     else{
@@ -178,7 +262,7 @@ function Set-UsaDynamicGroupMember{
                             $Table += addtoTable -AddType "ExtraGroup"
                         }
                         if($IdentityObject.GroupScope.value__ -lt $_.GroupScope.value__){
-                            Write-Warning "Group $_.Name with GUID $_.ObjectGUID cannot be nested in Group $Identity.name with GUID of $Identity.Object GUID as it's Group Scope is $_.GroupScope while target group is $Identity.GroupScope . Skipping."
+                            usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Group " + $_.Name + " with GUID " + $_.ObjectGUID + " cannot be nested in Group " + $Identity.name + " with GUID of " + $Identity.Object + " GUID as it's Group Scope is " + $_.GroupScope + " while target group is $Identity.GroupScope . Skipping.")
                         }
                     }
                 }
@@ -186,7 +270,7 @@ function Set-UsaDynamicGroupMember{
 
     #Add all objects from a custom Searchstring
     if($null -eq $SearchString -or $SearchString -eq ""){
-        Write-Output "No Search String added, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Search String added, Skipping"
     }
 
     #Else look up all objects matching your filter string and add to baseobject
@@ -198,7 +282,7 @@ function Set-UsaDynamicGroupMember{
                     $Table += addtoTable -AddType "SearchString"
                 }
                 if($IdentityObject.GroupScope.value__ -lt $SSValidateGroup.GroupScope.value__){
-                    Write-Warning $("Group " + $SSValidateGroup.Name + " with GUID " + $SSValidateGroup.ObjectGUID + " cannot be nested in Group " + $IdentityObject.Name + " with GUID of " + $IdentityObject.ObjectGUID + " as it's Group Scope is " + $SSValidateGroup.GroupScope + " while target group is " + $IdentityObject.GroupScope + ". Skipping.")
+                    usawritelog -LogLevel Warning -EventID 2013 -Message $("Group " + $SSValidateGroup.Name + " with GUID " + $SSValidateGroup.ObjectGUID + " cannot be nested in Group " + $IdentityObject.Name + " with GUID of " + $IdentityObject.ObjectGUID + " as it's Group Scope is " + $SSValidateGroup.GroupScope + " while target group is " + $IdentityObject.GroupScope + ". Skipping.")
                 }
             }
                 else{
@@ -210,11 +294,11 @@ function Set-UsaDynamicGroupMember{
     #Output baseobject if OutputPath is provided with timestamp on the files
     if($null -ne $OutputPath -and $OutputPath -ne ""){
         $Table | Export-Csv -Path $OutputPath
-        Write-Output $("Exported list of users added to " + $IdentityObject.Name + " to $OutputPath")
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Exported list of users added to " + $IdentityObject.Name + " to $OutputPath")
     }
     #Pause script for review if Debug is enabled
     if($PauseAtEnd -eq $true){
-        Write-Output "Displaying Object for review"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Displaying Object for review"
         $Table | Format-Table
         timeout /t -1
     }
@@ -222,78 +306,3 @@ function Set-UsaDynamicGroupMember{
     Get-ADGroup -Identity $IdentityObject | Set-ADGroup -Clear member
     Add-ADGroupMember -Identity $IdentityObject -Members $Table.ObjectGUID
 }
-
-function Add-UsaUserSendasGlobally{
-<#
-    .SYNOPSIS
-        Grants a User in Office 365 permission to send as ALL Licensed users. Good for global service accounts
-
-    .PARAMETER Trustee
-        Identity of user to gain full SendAs Rights
-
-    .PARAMETER Credentials
-        PSCredential Object of a NON MFA Admin to log into Office 365 with. If no credentials are provided will log in by default in interactive mode for MFA Login
-
-    .PARAMETER AzureEnvironmentName
-        Select Azure Environment to log into. Default is the normal AzureCloud environment, Alternative options are AzureChinaCloud, AzureGermanyCloud, and AzureUSGovernmentCloud. Options will select the same cloud as would be selected with Connect-AzureAD
-
-    .EXAMPLE
-        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
-
-    .EXAMPLE
-        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net -Credentials $(Get-Credential)
-
-    .EXAMPLE
-        PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
-
-    .NOTES
-        VERSION 1.0.1
-    #>
-
-    param(
-    [string]$Trustee,
-
-    [System.Management.Automation.PSCredential]
-    [ValidateNotNull()]
-    [Parameter(ParameterSetName='PSCredentialLogin')]
-        $Credential = [System.Management.Automation.PSCredential]::Empty,
-
-    [ValidateSet('AzureCloud','AzureChinaCloud','AzureGermanyCloud','AzureUSGovernment')]
-    [string[]]
-    $AzureEnvironmentName = "AzureCloud"
-
-    )
-
-    #Non MFA Credential Login
-    if($Credential -ne $([System.Management.Automation.PSCredential]::Empty) -and $null -ne $Credential){
-        Connect-UsaOffice365Service -Credential $Credential -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
-    }
-    #MFA Login
-    else{
-        Connect-UsaOffice365Service -Interactive -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
-    }
-    [System.Collections.ArrayList]$Users = Get-MsolUser -All | Where-Object{$_.IsLicensed -eq $True}
-    $CurrentPerms = Get-RecipientPermission -Trustee $Trustee
-    #Take all users in CurrentPerms
-    $CurrentPerms | ForEach-Object{
-        #For each user check if it's in the Users Object locally and save that as a value
-        $usertoremove = $_.Identity
-        $remove = $Users | Where-Object{$_.DisplayName -like "$usertoremove" -OR $_.ObjectID -eq "$usertoremove"}
-        #Check if it's 1 object, if -batch is on and we get 2 just skip the user and log it
-        if($null -eq $remove){
-            Write-Warning "$usertoremove NOT FOUND"
-            #Put it on a log list if that's on
-        }
-        elseif($remove.count -eq 1){
-            $Users.Remove($remove) #Remove object from list
-        }
-        else{
-            Write-Warning "The following users were found but will not be removed from existing adds, expect errors"
-            $remove
-        }
-    }
-    $Users | ForEach-Object{
-        Add-RecipientPermission -Identity $_.ObjectID -Trustee $Trustee -AccessRights SendAs  -Confirm:$false
-    }
-}
-

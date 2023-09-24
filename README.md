@@ -1,6 +1,26 @@
 # UsagiTools
 Simple Scripts to get random things done. Most if not all cmdlets are documented through Get-Help
 
+Script for many modules logs information an UsagiTools log source for automation against log. 
+
+Current EventIDs:
+    EventID
+    0   : Verbose audit message
+    1001: Azure AD Module was unable to install and import, manual import or reinstall module
+    1002: Exchange Online Module was unable to install and import, manual import or reinstall module
+    1003: Sharepoint Online Module was unable to install and import, manual import or reinstall module
+    1004: Sharepoint PNP Module was unable to install and import, manual import or reinstall module
+    1005: Teams Module was unable to install and import, manual import or reinstall module
+    1010: No German Servers for this cmdlet exist per documentation as of writing
+    1020: Output of Test-UsaNetwork
+    2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license, consider cleaning from group
+    2002: No German Servers for this cmdlet exist per documentation as of writing
+    2010: Invalid group for Set-UsaDynamicGroupMember, validate group via get-adgroup
+    2011: Could not validate User OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
+    2012: Could not validate Computer OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
+    2013: Set-UsaDynamicGroupMember group validation error stating you're unable to nest a parent level group in a child
+
+
 Identity
 	Module for scripts related to identity systems (Active Directory, Azure Active Directory, Local Users etc) and the management of such systems (AAD Connect for example)
 	
@@ -76,6 +96,7 @@ Identity
   
 Misc
 	Random bits and baubles that don't have a proper category yet
+	Has Event IDs 1000-1999 assigned as follows
 	
 	Connect-UsaOffice365Service
 		.SYNOPSIS
@@ -133,3 +154,29 @@ Misc
         Simple script to test if the current user is Admin, returns $true if the user is an admin
     .EXAMPLE
         PS> Test-UsaAdministrator
+
+	Test-UsaNetwork{
+    .SYNOPSIS
+        Pings multiple in the environment to path test
+    .PARAMETER Computer
+        Remote Computer to run against
+    .PARAMETER Credential
+        Credentials to use with Computer Flag
+    .PARAMETER Count
+        How many times to run test, do Unlimited for a continuous ping
+    .PARAMETER SourceIP
+        Provides a source IP to run tests against
+    .PARAMETER Internal
+        Internal hosts to ping
+    .PARAMETER External
+        External targets to ping
+    .PARAMETER Gateway
+        Internal Gateway to ping, defaults to current interface gateway
+    .PARAMETER DNS
+        DNS Servers to hit and test
+    .EXAMPLE
+        PS> Test-UsaNetwork
+    .EXAMPLE
+        PS> Test-UsaNetwork -Internal 10.0.0.3,10.0.0.4:443,web,web:8080 -External google.com,microsoft.com,lifehacker.com:443,34.34.34.34
+    .EXAMPLE
+        PS> Test-UsaNetwork -Gateway 10.0.0.1 -DNS 10.0.0.20,10.0.0.21

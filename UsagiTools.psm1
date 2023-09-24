@@ -6,8 +6,105 @@ Misc Module
 #>
 
 #USAGI TOOLS INTERNAL MODULE
-#VERSION 1.0.0
+#VERSION 1.1.0
 #Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) (Expect slightly less professional comments in this section here be monsters)
+function usawritelog{
+    <#
+    .SYNOPSIS
+        Writes log to both console and Event Viewer under "UsagiTools"
+    .PARAMETER Message
+        What we want to write out
+    .PARAMETER LogLevel
+        Log Level to select Error message output and Event Viewer EntryType. Valid values: 'Error','Warning','Information', 'SuccessAudit','FailureAudit'
+    .PARAMETER EventID
+        EventID to log under, see NOTES for list of IDs
+    .PARAMETER Category
+        Category to use for Write-Error. Matches all Write-Error Categories
+    .PARAMETER RecommendedAction
+        Adds Write-Error's Recommened action as needed
+    .EXAMPLE
+        PS> usamoduleimport -modulerequested ExchangeOnline -moduleset O365
+    .NOTES
+    Version 1.0.0
+    EventID
+    0   : Verbose audit message
+    1001: Azure AD Module was unable to install and import, manual import or reinstall module
+    1002: Exchange Online Module was unable to install and import, manual import or reinstall module
+    1003: Sharepoint Online Module was unable to install and import, manual import or reinstall module
+    1004: Sharepoint PNP Module was unable to install and import, manual import or reinstall module
+    1005: Teams Module was unable to install and import, manual import or reinstall module
+    1010: No German Servers for this cmdlet exist per documentation as of writing
+    1020: Output of Test-UsaNetwork
+    2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license, consider cleaning from group
+    2002: No German Servers for this cmdlet exist per documentation as of writing
+    2010: Invalid group for Set-UsaDynamicGroupMember, validate group via get-adgroup
+    2011: Could not validate User OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
+    2012: Could not validate Computer OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
+    2013: Set-UsaDynamicGroupMember group validation error stating you're unable to nest a parent level group in a child
+
+#>
+    Param(
+    [Parameter(Mandatory = $true)]
+    [string]
+        $Message,
+    [ValidateSet('Error','Warning','Information', 'SuccessAudit','FailureAudit')]
+    [Parameter(Mandatory = $true)]
+    [string]
+        $LogLevel,
+    [Parameter(Mandatory = $true)]
+    [int]
+        $EventID,
+    [ValidateSet('AuthenticationError',
+                'CloseError',
+                'ConnectionError',
+                'DeadlockDetected',
+                'DeviceError',
+                'FromStdError',
+                'InvalidArguement',
+                'InvalidData',
+                'InvalidOperation',
+                'InvalidResult',
+                'InvalidType',
+                'LimitsExceeded',
+                'MetadataError',
+                'NotEnabled',
+                'NotImplemented',
+                'NotInstalled',
+                'NotSpecified',
+                'ObjectNotFound',
+                'OpenError',
+                'OperationStopped',
+                'OperationTimeout',
+                'ParserError',
+                'PermissionDenied',
+                'ProtocalError',
+                'QuotaExceeded',
+                'ReadError',
+                'ResourceBusy',
+                'ResourceExists',
+                'ResourceUnavailable',
+                'SecurityError',
+                'SyntaxError',
+                'WriteError')]
+    [string]
+        $Category,
+    [string]$RecommendedAction
+    )
+    #Attempt to write to the log and throw no error if it fails (-ErrorAction for some reason still errors, research seems to point to it being a bug at the time of writing)
+    try{
+        Write-EventLog -LogName UsagiTools -Source UsagiTools -EntryType $LogLevel -EventId $EventID -Message $Message
+    }
+    catch{$_ | out-null}
+    switch($LogLevel){
+        "Error"{Write-Error -ErrorId $EventID -Category $Category -RecommendedAction $RecommendedAction -Message $Message}
+        "Warning"{Write-Warning -Message $Message}
+        "Information"{Write-Output $Message}
+        "SuccessAudit"{Write-Output $Message}
+        "FailureAudit"{Write-Output $Message}
+
+    }
+}
+
 function usamoduleimport{
     <#
     .SYNOPSIS
@@ -21,13 +118,12 @@ function usamoduleimport{
     .NOTES
     Version 1.0.0
 #>
-        Param
-        (
+        Param(
         [string]$modulerequested,
         [ValidateSet('O365')]
         [string[]]
         $moduleset
-)
+        )
         Write-Output "Attempting import of $modulerequested"
         $modinstalled = Get-InstalledModule $modulerequested
         if($null -eq $modinstalled -or $modinstalled -eq ""){
@@ -77,8 +173,7 @@ function usamoduleimport{
     .NOTES
     Version 1.0.0
 #>
-        Param
-        (
+        Param(
         [string]$modulerequested,
         [bool]$doupdate = $false
         )
@@ -95,9 +190,282 @@ function usamoduleimport{
             Write-Warning "$modulerequested Module already installed, Skipping"
             }
         }
+function usacheckNetname{
+        <#
+.SYNOPSIS
+    Checks a string provided with Address to determine if it's an IP or DNS name and if it includes a port then cleans it up and provides an object
+.PARAMETER Address
+    What we want to import
+.EXAMPLE
+    PS> usacheckNetname -Address 10.245.23.1
+.NOTES
+Version 1.0.0
+#>
+param(
+[Parameter(Mandatory, Position=0)]
+[string]$Address
+)
+
+#Cast our Address as a URI to pull the DNSSafeHost and Port from it
+$Base = ([URI]$("cast:\\"+$Address))
+$SafeHost = $Base.DNSSafeHost.TrimEnd('.')
+$Port    = $Base.Port
+
+#Check if the Address is a valid IP, if not it's a host and will be marked as such
+try{
+    [ipaddress]$SafeHost | Out-Null
+    $Type = "IP"}
+catch{
+    $Type = "DNSName"
+    }
+#Build our object
+$Device = New-Object PSObject
+$Device | Add-Member  -Type NoteProperty -Name "Address" -Value $SafeHost
+$Device | Add-Member  -Type NoteProperty -Name "Port" -Value $Port
+$Device | Add-Member  -Type NoteProperty -Name "Type" -Value $Type
+return $Device
+
+}
+
+function usaPing{
+<#
+.SYNOPSIS
+    Faster ping for continous loops that accepts ports
+.PARAMETER Source
+    IP of interface to bind to
+.PARAMETER Destination
+    Remote host to ping to
+.PARAMETER MTU
+    Packet MTU for normal pings, defaults to 32
+.PARAMETER Port
+    Port to query
+.EXAMPLE
+    PS> usaPing -source $SourceIP -Destination $Dest
+.EXAMPLE
+    PS> usaPing -source $SourceIP -Destination $Dest -port 8080
+.NOTES
+Version 1.0.0
+#>
+
+param(
+[Parameter(Mandatory, Position=0)]
+[ipaddress]
+    $Source,
+[Parameter(Mandatory, Position=1)]
+[ipaddress]
+    $Destination,
+[int]$MTU =32,
+[int]$Port
+)
+try{$null -ne [UsaIcmpPing] | Out-Null}
+catch{
+    Add-Type @"
+    using System;
+    using System.Net;
+    using System.Text;
+    using System.Runtime.InteropServices;
+
+    public class UsaIcmpPing
+    {
+        [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+        private struct ICMP_OPTIONS
+        {
+            public byte Ttl;
+            public byte Tos;
+            public byte Flags;
+            public byte OptionsSize;
+            public IntPtr OptionsData;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+        private struct ICMP_ECHO_REPLY
+        {
+            public int Address;
+            public int Status;
+            public int RoundTripTime;
+            public short DataSize;
+            public short Reserved;
+            public IntPtr DataPtr;
+            public ICMP_OPTIONS Options;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst=9900)]
+            public string Data;
+        }
+
+        [DllImport("Iphlpapi.dll", SetLastError = true)]
+        private static extern IntPtr IcmpCreateFile();
+        [DllImport("Iphlpapi.dll", SetLastError = true)]
+        private static extern bool IcmpCloseHandle(IntPtr handle);
+        [DllImport("Iphlpapi.dll", SetLastError = true)]
+        private static extern int IcmpSendEcho2Ex(IntPtr icmpHandle, IntPtr hEvent, IntPtr apcRoutine, IntPtr apcContext, int sourceAddress, int destinationAddress, string requestData, short requestSize, ref ICMP_OPTIONS requestOptions, ref ICMP_ECHO_REPLY replyBuffer, int replySize, int timeout);
+
+        public int PingRTT(IPAddress sourceIp, IPAddress destIp, int dataSize)
+        {
+            IntPtr icmpHandle = IcmpCreateFile();
+            ICMP_OPTIONS icmpOptions = new ICMP_OPTIONS();
+            icmpOptions.Ttl = 255;
+            icmpOptions.Flags = 0x02;
+            ICMP_ECHO_REPLY icmpReply = new ICMP_ECHO_REPLY();
+            string sData = CreateSendData(dataSize);
+
+            int replies = IcmpSendEcho2Ex(icmpHandle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, BitConverter.ToInt32(sourceIp.GetAddressBytes(), 0), BitConverter.ToInt32(destIp.GetAddressBytes(), 0), sData, (short)sData.Length, ref icmpOptions, ref icmpReply, Marshal.SizeOf(icmpReply), 30);
+            IcmpCloseHandle(icmpHandle);
+
+            if (replies > 0)
+            {
+                return icmpReply.RoundTripTime;
+            }
+
+            return -1;
+        }
+
+        private string CreateSendData(int length)
+        {
+            var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            var random = new Random();
+            StringBuilder builder = new StringBuilder();
+            for(int index = 0; index < length; index++)
+            {
+                builder.Append(chars[random.Next(chars.Length)]);
+            }
+            return builder.ToString();
+        }
+    }
+"@
+}
+if($null -eq $Port -or $Port -eq ""){
+        $RTT = $([UsaIcmpPing]::new()).PingRTT($Source, $Destination, $MTU)
+
+        #Check if reply was received, on -1 this is a no (Warning, code not written to account for FTL ping times)
+        if($RTT -eq -1){$Connected = $false}
+        else{$Connected = $true}
+    }
+if($null -ne $Port -and $Port -is [int] -and $Port -ne 0){
+    $tcpClient = $null
+    $connect = $null
+    $Success = $null
+    $localport = 0
+    [ipaddress]$Source = $Source
+    $localEP = New-Object System.Net.IPEndPoint($Source, $localPort)
+    $tcpClient = New-Object System.Net.Sockets.TcpClient($localEP)
+    $stopwatch = New-Object System.Diagnostics.Stopwatch
+    $stopwatch.Start()
+    $connect = $tcpClient.BeginConnect($Destination, $Port, $null, $null)
+    $success = $connect.AsyncWaitHandle.WaitOne(3000)
+    $stopwatch.Stop()
+    if($success) {
+        if($tcpClient.Connected) {
+            $Connected = $true
+        } else {
+            $Connected = $false
+        }
+
+        $tcpClient.EndConnect($connect)
+        $tcpClient.Close()
+    } else {
+        $Connected = $false
+    }
+    $RTT = $stopwatch.Elapsed.TotalMilliseconds
+}
+
+
+#Build our object
+$TestResult = New-Object PSObject
+$TestResult | Add-Member  -Type NoteProperty -Name "SRC" -Value $Source
+$TestResult | Add-Member  -Type NoteProperty -Name "DST" -Value $Destination
+$TestResult | Add-Member  -Type NoteProperty -Name "RTT" -Value $([Math]::Round($RTT))
+$TestResult | Add-Member  -Type NoteProperty -Name "MTU" -Value $MTU
+$TestResult | Add-Member  -Type NoteProperty -Name "Port" -Value $Port
+$TestResult | Add-Member  -Type NoteProperty -Name "Connected" -Value $Connected
+return $TestResult
+
+}
 #USAGI TOOLS IDENTITY MODULE
-#VERSION 1.0.1
+#VERSION 1.0.2
 #Various Powershell tools designed around Identity Provisioning / Management systems (Active Directory, Azure AD, Etc)
+#Module Event # 2000-2999
+
+
+function Add-UsaUserSendasGlobally{
+<#
+    .SYNOPSIS
+        Grants a User in Office 365 permission to send as ALL Licensed users. Good for global service accounts as a workaround for Applications that require it
+
+    .PARAMETER Trustee
+        Identity of user to gain full SendAs Rights
+
+    .PARAMETER Credentials
+        PSCredential Object of a NON MFA Admin to log into Office 365 with. If no credentials are provided will log in by default in interactive mode for MFA Login
+
+    .PARAMETER AzureEnvironmentName
+        Select Azure Environment to log into. Default is the normal AzureCloud environment, Alternative options are AzureChinaCloud, AzureGermanyCloud, and AzureUSGovernmentCloud. Options will select the same cloud as would be selected with Connect-AzureAD
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net -Credentials $(Get-Credential)
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
+
+    .NOTES
+        VERSION 1.0.2
+    #>
+
+    param(
+    [string]$Trustee,
+
+    [System.Management.Automation.PSCredential]
+    [ValidateNotNull()]
+    [Parameter(ParameterSetName='PSCredentialLogin')]
+        $Credential = [System.Management.Automation.PSCredential]::Empty,
+
+    [ValidateSet('AzureCloud','AzureChinaCloud','AzureGermanyCloud','AzureUSGovernment')]
+    [string[]]
+    $AzureEnvironmentName = "AzureCloud"
+
+    )
+
+    #Non MFA Credential Login
+    if($Credential -ne $([System.Management.Automation.PSCredential]::Empty) -and $null -ne $Credential){
+        Connect-UsaOffice365Service -Credential $Credential -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
+    }
+    #MFA Login
+    else{
+        Connect-UsaOffice365Service -Interactive -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
+    }
+
+    usawritelog  -Message "Gathering Users list, please wait" -LogLevel SuccessAudit -EventID 1000
+
+    [System.Collections.ArrayList]$Users = Get-MsolUser -All | Where-Object{$_.IsLicensed -eq $True}
+    $CurrentPerms = Get-RecipientPermission -Trustee $Trustee
+
+    #Take all users in CurrentPerms and remove them from the Users Object so we don't push duplicate permissions
+    usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Cleaning Permission Object"
+    $CurrentPerms | ForEach-Object{
+        #For each user check if it's in the Users Object locally and save that as a value
+        $usertoremove = $_.Identity
+        #Get the object from our $Users MSOnline based object if it exists, due to varying Identity vales checks  DisplayName, ObjectID, SamAccountName,  UserPrincipalName
+        $remove = $Users | Where-Object{$_.DisplayName -like "$usertoremove" -OR $_.ObjectID -eq "$usertoremove" -OR  $_.UserPrincipalName.Split('@')[0] -like $usertoremove -OR  $_.UserPrincipalName -like $usertoremove}
+        #Check if it's 1 object, if -batch is on and we get 2 just skip the user and log it
+        if($null -eq $remove){
+            usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove NOT FOUND"
+            #Put it on a log list if that's on
+        }
+        elseif($remove.count -eq 1){
+            $Users.Remove($remove) #Remove object from list
+        }
+        else{
+            usawritelog -LogLevel Warning -EventID 2002 -Message $("The following users were found but will not be removed from existing adds, expect errors
+            "+ $remove)
+        }
+    }
+
+    usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Adding permissions for " + $Trustee)
+    $Users | ForEach-Object{
+        Add-RecipientPermission -Identity $_.ObjectID -Trustee $Trustee -AccessRights SendAs  -Confirm:$false
+    }
+}
 
 function Set-UsaDynamicGroupMember{
     <#
@@ -147,7 +515,7 @@ function Set-UsaDynamicGroupMember{
         PS> Set-UsaDynamicGroupMember -Identity TexasUsers -UserOU "OU=Users,OU=TX,OU=Org,DC=Contoso,DC=internal" -UsersManual "JDoeCEO@Contoso.internal"
 
     .NOTES
-       Version 1.0.1
+       Version 1.0.2
     #>
     [CmdletBinding(SupportsShouldProcess)]
     Param
@@ -181,7 +549,7 @@ function Set-UsaDynamicGroupMember{
     #Check that Identity group exists, if not terminate
     $IdentityObject = get-adgroup $Identity
     if($null -eq $IdentityObject -or $IdentityObject -eq ""){
-        Write-Error "NO GROUP NAMED $Identity FOUND, ENDING SCRIPT" -TargetObject $Identity -RecommendedAction "Check your target AD Group and try again" -Category InvalidArgument
+        usawritelog -LogLevel Error -EventID 2010 -Message "NO GROUP NAMED $Identity FOUND, ENDING SCRIPT" -RecommendedAction "Check your target AD Group and try again" -Category InvalidArgument
         break
     }
 
@@ -193,7 +561,7 @@ function Set-UsaDynamicGroupMember{
                 Get-ADOrganizationalUnit $_ | Out-Null
             }
             catch{
-                Write-Warning "An error occured validating a User OU:"
+                usawritelog -LogLevel Warning -EventID 2011 -Message "An error occured validating a User OU:"
                 Write-Error $_
                 break
             }
@@ -206,7 +574,7 @@ function Set-UsaDynamicGroupMember{
                 Get-ADOrganizationalUnit $_ | out-null
             }
             catch{
-                Write-Warning "An error occured validating a Computer OU:"
+                usawritelog -LogLevel Warning -EventID 2012 -Message "An error occured validating a Computer OU:"
                 Write-Error $_
                 break
             }
@@ -218,7 +586,7 @@ function Set-UsaDynamicGroupMember{
 
     #If UserOU is null skip
     if($null -eq $UsersOU -or $UsersOU -eq ""){
-        Write-Output "No User OU selected, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No User OU selected, Skipping"
     }
     #Else look up all User Objects in OU and add to baseobject
     else{
@@ -230,7 +598,7 @@ function Set-UsaDynamicGroupMember{
     }
     #If ComputerOU is null skip
     if($null -eq $ComputersOU -or $ComputersOU -eq ""){
-        Write-Output "No Computer OU selected, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Computer OU selected, Skipping"
     }
 
     #Else look up all Computer objects in OU and add to baseobject
@@ -243,7 +611,7 @@ function Set-UsaDynamicGroupMember{
     }
     #Add any manual Users and Computers
     if($null -eq $Users -or $Users -eq ""){
-        Write-Output "No Extra Users selected, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Extra Users selected, Skipping"
     }
     #Else look up all User Objects and add to baseobject
     else{
@@ -254,7 +622,7 @@ function Set-UsaDynamicGroupMember{
                 }
     }
     if($null -eq $Computers -or $Computers -eq ""){
-        Write-Output "No Extra Computers selected, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Extra Computers selected, Skipping"
     }
     #Else look up all User Objects and add to baseobject
     else{
@@ -275,7 +643,7 @@ function Set-UsaDynamicGroupMember{
                             $Table += addtoTable -AddType "ExtraGroup"
                         }
                         if($IdentityObject.GroupScope.value__ -lt $_.GroupScope.value__){
-                            Write-Warning "Group $_.Name with GUID $_.ObjectGUID cannot be nested in Group $Identity.name with GUID of $Identity.Object GUID as it's Group Scope is $_.GroupScope while target group is $Identity.GroupScope . Skipping."
+                            usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Group " + $_.Name + " with GUID " + $_.ObjectGUID + " cannot be nested in Group " + $Identity.name + " with GUID of " + $Identity.Object + " GUID as it's Group Scope is " + $_.GroupScope + " while target group is $Identity.GroupScope . Skipping.")
                         }
                     }
                 }
@@ -283,7 +651,7 @@ function Set-UsaDynamicGroupMember{
 
     #Add all objects from a custom Searchstring
     if($null -eq $SearchString -or $SearchString -eq ""){
-        Write-Output "No Search String added, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Search String added, Skipping"
     }
 
     #Else look up all objects matching your filter string and add to baseobject
@@ -295,7 +663,7 @@ function Set-UsaDynamicGroupMember{
                     $Table += addtoTable -AddType "SearchString"
                 }
                 if($IdentityObject.GroupScope.value__ -lt $SSValidateGroup.GroupScope.value__){
-                    Write-Warning $("Group " + $SSValidateGroup.Name + " with GUID " + $SSValidateGroup.ObjectGUID + " cannot be nested in Group " + $IdentityObject.Name + " with GUID of " + $IdentityObject.ObjectGUID + " as it's Group Scope is " + $SSValidateGroup.GroupScope + " while target group is " + $IdentityObject.GroupScope + ". Skipping.")
+                    usawritelog -LogLevel Warning -EventID 2013 -Message $("Group " + $SSValidateGroup.Name + " with GUID " + $SSValidateGroup.ObjectGUID + " cannot be nested in Group " + $IdentityObject.Name + " with GUID of " + $IdentityObject.ObjectGUID + " as it's Group Scope is " + $SSValidateGroup.GroupScope + " while target group is " + $IdentityObject.GroupScope + ". Skipping.")
                 }
             }
                 else{
@@ -307,11 +675,11 @@ function Set-UsaDynamicGroupMember{
     #Output baseobject if OutputPath is provided with timestamp on the files
     if($null -ne $OutputPath -and $OutputPath -ne ""){
         $Table | Export-Csv -Path $OutputPath
-        Write-Output $("Exported list of users added to " + $IdentityObject.Name + " to $OutputPath")
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Exported list of users added to " + $IdentityObject.Name + " to $OutputPath")
     }
     #Pause script for review if Debug is enabled
     if($PauseAtEnd -eq $true){
-        Write-Output "Displaying Object for review"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Displaying Object for review"
         $Table | Format-Table
         timeout /t -1
     }
@@ -319,84 +687,10 @@ function Set-UsaDynamicGroupMember{
     Get-ADGroup -Identity $IdentityObject | Set-ADGroup -Clear member
     Add-ADGroupMember -Identity $IdentityObject -Members $Table.ObjectGUID
 }
-
-function Add-UsaUserSendasGlobally{
-<#
-    .SYNOPSIS
-        Grants a User in Office 365 permission to send as ALL Licensed users. Good for global service accounts
-
-    .PARAMETER Trustee
-        Identity of user to gain full SendAs Rights
-
-    .PARAMETER Credentials
-        PSCredential Object of a NON MFA Admin to log into Office 365 with. If no credentials are provided will log in by default in interactive mode for MFA Login
-
-    .PARAMETER AzureEnvironmentName
-        Select Azure Environment to log into. Default is the normal AzureCloud environment, Alternative options are AzureChinaCloud, AzureGermanyCloud, and AzureUSGovernmentCloud. Options will select the same cloud as would be selected with Connect-AzureAD
-
-    .EXAMPLE
-        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
-
-    .EXAMPLE
-        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net -Credentials $(Get-Credential)
-
-    .EXAMPLE
-        PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
-
-    .NOTES
-        VERSION 1.0.1
-    #>
-
-    param(
-    [string]$Trustee,
-
-    [System.Management.Automation.PSCredential]
-    [ValidateNotNull()]
-    [Parameter(ParameterSetName='PSCredentialLogin')]
-        $Credential = [System.Management.Automation.PSCredential]::Empty,
-
-    [ValidateSet('AzureCloud','AzureChinaCloud','AzureGermanyCloud','AzureUSGovernment')]
-    [string[]]
-    $AzureEnvironmentName = "AzureCloud"
-
-    )
-
-    #Non MFA Credential Login
-    if($Credential -ne $([System.Management.Automation.PSCredential]::Empty) -and $null -ne $Credential){
-        Connect-UsaOffice365Service -Credential $Credential -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
-    }
-    #MFA Login
-    else{
-        Connect-UsaOffice365Service -Interactive -Service ExchangeOnline,MSOnline -AzureEnvironmentName $AzureEnvironmentName
-    }
-    [System.Collections.ArrayList]$Users = Get-MsolUser -All | Where-Object{$_.IsLicensed -eq $True}
-    $CurrentPerms = Get-RecipientPermission -Trustee $Trustee
-    #Take all users in CurrentPerms
-    $CurrentPerms | ForEach-Object{
-        #For each user check if it's in the Users Object locally and save that as a value
-        $usertoremove = $_.Identity
-        $remove = $Users | Where-Object{$_.DisplayName -like "$usertoremove" -OR $_.ObjectID -eq "$usertoremove"}
-        #Check if it's 1 object, if -batch is on and we get 2 just skip the user and log it
-        if($null -eq $remove){
-            Write-Warning "$usertoremove NOT FOUND"
-            #Put it on a log list if that's on
-        }
-        elseif($remove.count -eq 1){
-            $Users.Remove($remove) #Remove object from list
-        }
-        else{
-            Write-Warning "The following users were found but will not be removed from existing adds, expect errors"
-            $remove
-        }
-    }
-    $Users | ForEach-Object{
-        Add-RecipientPermission -Identity $_.ObjectID -Trustee $Trustee -AccessRights SendAs  -Confirm:$false
-    }
-}
-
 #USAGI TOOLS MISC MODULE
-#VERSION 1.0.1
+#VERSION 1.0.2
 #Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) Or otherwise misc functions
+#Module Event # 1000-1999
 
 function Get-UsaPublicIP{
     <#
@@ -404,6 +698,8 @@ function Get-UsaPublicIP{
         Simple script to pull public IP using IPify for Windows PCs
     .PARAMETER Computer
         Runs cmdlet again a remote Windows PC and returns
+    .PARAMETER Credential
+        PSCredential object to attempt to use to remote to your Computer defined with Computer
     .EXAMPLE
         PS> Get-UsaPublicIP -Computer Srv-DC1.contoso.loc
     .EXAMPLE
@@ -463,7 +759,7 @@ function Connect-UsaOffice365Service{
     .EXAMPLE
         PS> Connect-UsaOffice365Service -Interactive -Services -SharepointPNPLibraryURI https://contoso.sharepoint.com/sites/AccountingFiles/default.aspx
     .NOTES
-    Version 1.0.1
+    Version 1.0.2
 #>
 
 [CmdletBinding(DefaultParameterSetName='noOptions')]
@@ -479,10 +775,12 @@ Param
     [System.Management.Automation.PSCredential]
     [ValidateNotNull()]
     [Parameter(ParameterSetName='PSCredentialLogin')]
-                $Credential = [System.Management.Automation.PSCredential]::Empty,
+        $Credential = [System.Management.Automation.PSCredential]::Empty,
+
     [Parameter(ParameterSetName='InteractiveLogin')]
     [Switch]
         $Interactive,
+
     [String]$SharepointHostName,
     [String]$SharepointPNPLibraryURI
 )
@@ -508,7 +806,7 @@ Process{
             }
             until($ModImport -le 1)
 
-            Write-Output "Attempting AzureAD Login"
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting AzureAD Login"
             if($ModImport -eq 1){
             #If usamoduleimport returns 1 we've successfully imported
                 if($Interactive -eq $false -or $null -eq $Interactive){
@@ -519,7 +817,7 @@ Process{
                 }
             }
             if($ModImport -eq 0){
-                Write-Error "Please try installing the AzureAD Module later."
+                usawritelog -LogLevel Warning -EventID 1001 -Message "Please try installing the AzureAD Module later."
             }
         }
 
@@ -533,7 +831,7 @@ Process{
             }
             until($ModImport -le 1)
 
-            Write-Output "Attempting Exchange Online Login"
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting Exchange Online Login"
             if($ModImport -eq 1){
             #If usamoduleimport returns 1 we've successfully imported
                 if($Interactive -eq $false -or $null -eq $Interactive){
@@ -565,7 +863,7 @@ Process{
                     }
                 }
             if($ModImport -eq 0){
-                Write-Warning "Please try installing the ExchangeOnlineManagement Module later."
+                usawritelog -LogLevel Warning -EventID 1001 -Message  "Please try installing the ExchangeOnlineManagement Module later."
                 }
             }
         }
@@ -580,7 +878,7 @@ Process{
             }
             until($ModImport -le 1)
 
-            Write-Output "Attempting MSOL Login"
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting MSOL Login"
             if($ModImport -eq 1){
             #If usamoduleimport returns 1 we've successfully imported
 
@@ -592,7 +890,7 @@ Process{
                     }
                 }
             if($ModImport -eq 0){
-                Write-Output "Please try installing the MSOnline Module later."
+                usawritelog -LogLevel Warning -EventID 1002 -Message "Please try installing the MSOnline Module later."
             }
         }
 
@@ -606,7 +904,7 @@ Process{
             }
             until($ModImport -le 1)
 
-            Write-Output "Attempting Sharepoint Login"
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting Sharepoint Login"
 
             if($ModImport -eq 1){
 
@@ -641,7 +939,7 @@ Process{
 
                 }
             if($ModImport -eq 0){
-                Write-Warning "Please try installing the SharePoint Module later."
+                usawritelog -LogLevel Warning -EventID 1003 -Message "Please try installing the SharePoint Module later."
                 }
             }
         }
@@ -654,7 +952,7 @@ Process{
             do{$ModImport = usamoduleimport -modulerequested "PnP.Powershell" -moduleset O365}
             until($ModImport -le 1)
 
-            Write-Output "Attempting Sharepoint PNP Login to $SharepointPNPLibraryURI"
+            Write-Outputusawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting Sharepoint PNP Login to $SharepointPNPLibraryURI"
 
             if($ModImport -eq 1){
             #Check if the required module is imported and if not install it
@@ -687,7 +985,7 @@ Process{
                         }
                 }
             if($ModImport -eq 0){
-                Write-Output "Please try installing the SharePointPnP Module later."
+                usawritelog -LogLevel SuccessAudit -EventID 1004 -Message  "Please try installing the SharePointPnP Module later."
                 }
             }
         }
@@ -700,7 +998,7 @@ Process{
             }
             until($ModImport -le 1)
 
-            Write-Output "Attempting Security and Compliance Center Login"
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting Security and Compliance Center Login"
             if($ModImport -eq 1){
             #Check if the required module is imported and if not install it
                 if($Interactive -eq $false -or $null -eq $Interactive){
@@ -732,7 +1030,7 @@ Process{
                     }
                 }
             if($ModImport -eq 0){
-                Write-Warning "Please try installing the ExchangeOnlineManagement Module later."
+                usawritelog -LogLevel Warning -EventID 1001 -Message  "Please try installing the ExchangeOnlineManagement Module later."
                 }
             }
         }
@@ -744,7 +1042,7 @@ Process{
             #Check if the required module is imported and if not install it
             do{$ModImport = usamoduleimport -modulerequested "MicrosoftTeams" -moduleset O365}
             until($ModImport -le 1)
-            Write-Output "Attempting Teams Login"
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting Teams Login"
             if($ModImport -eq 1){
 
             #Check if the required module is imported and if not install it
@@ -757,7 +1055,7 @@ Process{
                         Connect-MicrosoftTeams -Credential $Credential -TeamsEnvironmentName TeamsChina
                         }
                     if($AzureEnvironmentName -eq "AzureGermanyCloud"){
-                        Write-Warning "Cannot connect to Teams in AzureGermanyCloud as no tenant exists, see https://learn.microsoft.com/en-us/powershell/module/teams/connect-microsoftteams?view=teams-ps#-teamsenvironmentname for more info"
+                        usawritelog -LogLevel Warning -EventID 1010 -Message "Cannot connect to Teams in AzureGermanyCloud as no tenant exists, see https://learn.microsoft.com/en-us/powershell/module/teams/connect-microsoftteams?view=teams-ps#-teamsenvironmentname for more info"
                         }
                     if($AzureEnvironmentName -eq "AzureUSGovernment"){
                         Connect-MicrosoftTeams -Credential $Credential -TeamsEnvironmentName TeamsGCCH
@@ -771,7 +1069,7 @@ Process{
                         Connect-MicrosoftTeams -TeamsEnvironmentName TeamsChina
                         }
                     if($AzureEnvironmentName -eq "AzureGermanyCloud"){
-                        Write-Warning "Cannot connect to Teams in AzureGermanyCloud as no tenant exists, see https://learn.microsoft.com/en-us/powershell/module/teams/connect-microsoftteams?view=teams-ps#-teamsenvironmentname for more info"
+                        usawritelog -LogLevel Warning -EventID 1010 -Message "Cannot connect to Teams in AzureGermanyCloud as no tenant exists, see https://learn.microsoft.com/en-us/powershell/module/teams/connect-microsoftteams?view=teams-ps#-teamsenvironmentname for more info"
                         }
                     if($AzureEnvironmentName -eq "AzureUSGovernment"){
                         Connect-MicrosoftTeams -TeamsEnvironmentName TeamsGCCH
@@ -780,7 +1078,7 @@ Process{
             }
 
             if($ModImport -eq 0){
-                Write-Warning "Please try installing the MicrosoftTeams Module later."
+                usawritelog -LogLevel Warning -EventID 1005 -Message   "Please try installing the MicrosoftTeams Module later."
                 }
             }
     }
@@ -804,7 +1102,7 @@ function Install-UsaOffice365Module{
     .EXAMPLE
         PS> Install-UsaOffice365Module -Module AzureAD -Update
     .NOTES
-     Version 1.0.1
+     Version 1.0.2
 #>
 
 
@@ -846,7 +1144,7 @@ if($Module -contains "SharePointPnP"){
         Update-Module "PnP.PowerShell" -RequiredVersion 1.12.0
     }
     if($null -ne $PNPinstalled -and $PNPinstalled -ne ""){
-        Write-Output "SharePointPnP Module already installed, Skipping"
+        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "SharePointPnP Module already installed, Skipping"
     }
 }
 if($Module -contains "Teams"){
@@ -866,4 +1164,332 @@ function Test-UsaAdministrator  {
 #>
     $user = [Security.Principal.WindowsIdentity]::GetCurrent();
     (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+}
+
+function Test-UsaNetwork{
+    <#
+    .SYNOPSIS
+        Pings multiple in the environment to path test
+    .PARAMETER Count
+        How many times to run test, do Unlimited for a continuous ping
+    .PARAMETER SourceIP
+        Provides a source IP to run tests against
+    .PARAMETER Internal
+        Internal hosts to ping
+    .PARAMETER External
+        External targets to ping
+    .PARAMETER Gateway
+        Internal Gateway to ping, defaults to current interface gateway
+    .PARAMETER DNS
+        DNS Servers to hit and test
+    .EXAMPLE
+        PS> Test-UsaNetwork
+    .EXAMPLE
+        PS> Test-UsaNetwork -Internal 10.0.0.3,10.0.0.4:443,web,web:8080 -External google.com,microsoft.com,lifehacker.com:443,34.34.34.34
+    .EXAMPLE
+        PS> Test-UsaNetwork -Gateway 10.0.0.1 -DNS 10.0.0.20,10.0.0.21
+    .NOTES
+     Version 1.0.0
+#>
+
+    Param
+    (
+    [int]$Count,
+    $Internal  = @(),
+    $External  = @(),
+    [string]$Source,
+    $Gateway   = @(),
+    $DNS       = @(),
+    [Switch]$SecureDNS
+    )
+
+    function addtoTable{
+        Param
+            (
+                [string]$Hostname,
+                [ipaddress]$IP,
+                [string]$Port,
+                [int]$Success,
+                [int]$Failure,
+                [string]$RTT,
+                [string]$AddType
+            )
+            $TableRow =New-Object PSObject
+            $TableRow | Add-Member  -Type NoteProperty -Name "Hostname" -Value $Hostname
+            $TableRow | Add-Member  -Type NoteProperty -Name "IP" -Value $IP
+            $TableRow | Add-Member  -Type NoteProperty -Name "Port" -Value $Port
+            $TableRow | Add-Member  -Type NoteProperty -Name "Success" -Value $Success
+            $TableRow | Add-Member  -Type NoteProperty -Name "Failure" -Value $Failure
+            $TableRow | Add-Member  -Type NoteProperty -Name "RTTinMS" -Value $RTT
+            $TableRow | Add-Member  -Type NoteProperty -Name "AddType" -Value $AddType
+            $TableRow | Add-Member  -Type NoteProperty -Name "ID" -Value $ID
+            return $TableRow
+    }
+
+    #Get base info on SourceIP
+    if($null -ne $Source -and $Source -notlike ""){
+        $SourceAddress = $Source
+    }
+    else{
+        $SourceAddress = (Test-NetConnection).SourceAddress.IPAddress
+    }
+
+    #Build a default object for internal paths to test against
+    $Adapter = Get-NetIPConfiguration | Where-Object {$_.IPv4Address.IPAddress -like $SourceAddress}
+
+
+    #Check Gateway object, if none provided use source object
+    if($null -ne $Gateway -and $Gateway -notlike ""){
+        $GWIP = $Gateway
+    }
+    else{
+        $GWIP = $Adapter.IPv4DefaultGateway.NextHop
+    }
+    #Check DNS Objects are provided and use default adapter if not
+    if($null -ne $DNS -and $DNS -notlike ""){
+        $DNSIP = $DNS
+    }
+    else{
+        $DNSIP = $Adapter.DNSServer.ServerAddresses
+    }
+
+    #Clean Internal Addresses
+    $Int = $Internal | ForEach-Object {usacheckNetname $_}
+    #Clean External Addresses
+    $Ext = $External | ForEach-Object {usacheckNetname $_}
+
+    usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Gathering network info, please wait..."
+    #Create base table object
+    $BaseTable  =  @()
+    $Success = 0
+    $Failure = 0
+    $ID = 0
+
+    #Add Gateway
+    $GWIP | ForEach-Object{
+        $ID++
+        $TRow = addtoTable -Hostname $(Resolve-DnsName $_ -ErrorAction SilentlyContinue).NameHost -IP $_ -Port "ICMP" -Success $Success -Failure $Failure -RTT "Null" -AddType "DefaultGateway" -ID $ID
+        $BaseTable += $TRow
+    }
+    #Add DNS
+    $DNSIP | ForEach-Object{
+        $ID++
+        $TRow = addtoTable -Hostname $(Resolve-DnsName $_ -ErrorAction SilentlyContinue).NameHost -IP $_ -Port "ICMP" -Success $Success -Failure $Failure -RTT "Null" -AddType "DNS" -ID $ID
+        $BaseTable += $TRow
+
+        $ID++
+        $TRow = addtoTable -Hostname $(Resolve-DnsName $_ -ErrorAction SilentlyContinue).NameHost -IP $_ -Port "53" -Success $Success -Failure $Failure -RTT "Null" -AddType "DNS" -ID $ID
+        $BaseTable += $TRow
+
+        if($SecureDNS -eq $true){
+            $ID++
+            $TRow = addtoTable -Hostname $(Resolve-DnsName $_ -ErrorAction SilentlyContinue).NameHost -IP $_ -Port "853" -Success $Success -Failure $Failure -RTT "Null" -AddType "DNS" -ID $ID
+            $BaseTable += $TRow
+
+        }
+    }
+
+    #Add Internal Devices
+    ForEach ($Device in $Int){
+        $ID++
+        switch($Device.Type){
+            DNSName {
+                $TRow = addtoTable -Hostname $Device.Address -IP $((Test-NetConnection $Device.Address -ErrorAction SilentlyContinue).IPV4Address.IPAddressToString |Sort-Object -Unique) -Port $Device.Port -Success $Success -Failure $Failure -RTT "Null" -AddType $("Internal"+$Device.Type) -ID $ID
+                $BaseTable += $TRow
+            }
+            IP {
+                $TRow = addtoTable -Hostname $(Resolve-DnsName $Device.Address -DnsOnly -ErrorAction SilentlyContinue).NameHost -IP $Device.Address -Port $Device.Port -Success $Success -Failure $Failure -RTT "Null" -AddType $("Internal"+$Device.Type) -ID $ID
+                $BaseTable += $TRow
+
+            }
+        }
+    }
+
+    #Add External Devices
+    ForEach ($Device in $Ext){
+        $ID++
+        switch($Device.Type){
+            DNSName {
+                $TRow = addtoTable -Hostname $Device.Address -IP $((Test-NetConnection $Device.Address).IPV4Address.IPAddressToString |Sort-Object -Unique) -Port $Device.Port -Success $Success -Failure $Failure -RTT "Null" -AddType $("External"+$Device.Type) -ID $ID += $BaseTable
+                $BaseTable += $TRow
+            }
+            IP {
+                $TRow = addtoTable -Hostname $(Resolve-DnsName $Device.Address -DnsOnly -ErrorAction SilentlyContinue).NameHost -IP $Device.Address -Port $Device.Port -Success $Success -Failure $Failure -RTT "Null" -AddType $("External"+$Device.Type) -ID $ID += $BaseTable
+                $BaseTable += $TRow
+            }
+        }
+    }
+
+    #Test all IPs via Jobs
+    $Upcount = 0
+
+    Do{
+    $Start = "Testing network connections via Interface " + $Adapter.InterfaceAlias + " with Index of " + $Adapter.InterfaceIndex + " And IP(s), of " + $($Adapter.IPv4Address.IpAddress -join " , ")
+    $origpos = $host.UI.RawUI.CursorPosition
+    $Start
+    $BaseTable | Format-Table -AutoSize | Out-String | ForEach-Object {Write-Output $_}
+    $JobBase = ((New-Guid).Guid | Out-String).Replace("-","").Substring(0,10)
+    ForEach ($Row in $BaseTable){
+        if($Row.Port -eq -1){$Row.Port = "ICMP"}
+        switch($Row.AddType){
+        DefaultGateway {
+            if($null -eq $Row.Hostname -or $Row.Hostname -like ""){
+                $Row.Hostname = (Resolve-DnsName $Row.IP -ErrorAction SilentlyContinue).NameHost
+            }
+            Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                $function:usaPing = $using:function:usaPing
+                $SourceAddress = $using:SourceAddress
+                $Row = $using:Row
+                usaPing -Source $SourceAddress -Destination $Row.IP -ErrorAction SilentlyContinue
+            } | Out-Null
+        }
+        DNS{
+            if($Row.Port -eq "ICMP"){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+            if($Row.Port -ne "ICMP" -and $Row.Port -ne -1){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -Port $Row.Port -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+        }
+        InternalDNSName{
+            if($null -eq $Row.IP -or $Row.IP -like ""){
+                [IPAddress]$Row.IP = (Test-NetConnection -ComputerName $Row.HostName -ErrorAction SilentlyContinue).RemoteAddress.IPAddressToString
+            }
+            if($Row.Port -eq "ICMP"){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+            if($Row.Port -ne -1 -and $Row.Port -ne "ICMP"){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -Port $Row.Port -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+        }
+        InternalIP{
+            if($null -eq $Row.Hostname -or $Row.Hostname -like ""){
+                $Row.Hostname = (Resolve-DnsName $Row.IP -DnsOnly -ErrorAction SilentlyContinue).NameHost
+            }
+            if($Row.Port -eq "ICMP"){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+            if($Row.Port -ne -1 -and $Row.Port -ne "ICMP"){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -Port $Row.Port -ErrorAction SilentlyContinue
+                }| Out-Null
+            }
+        }
+        ExternalDNSName{
+            if($null -eq $Row.IP -or $Row.IP -like ""){
+                [IPAddress]$Row.IP = (Test-NetConnection -ComputerName $Row.HostName -ErrorAction SilentlyContinue).RemoteAddress.IPAddressToString
+            }
+            if($Row.Port -eq "ICMP" -and $null -ne $Row.IP){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+            if($Row.Port -ne -1 -and $Row.Port -ne "ICMP"){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -Port $Row.Port -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+        }
+        ExternalIP{
+            if($null -eq $Row.Hostname -or $Row.Hostname -like ""){
+                $Row.Hostname = (Resolve-DnsName $Row.IP -DnsOnly -ErrorAction SilentlyContinue).NameHost
+            }
+            if($Row.Port -eq "ICMP"){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+            if($Row.Port -ne -1 -and $Row.Port -ne "ICMP"){
+                Start-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) -ScriptBlock {
+                    $function:usaPing = $using:function:usaPing
+                    $SourceAddress = $using:SourceAddress
+                    $Row = $using:Row
+                    usaPing -Source $SourceAddress -Destination $Row.IP -Port $Row.Port -ErrorAction SilentlyContinue
+                } | Out-Null
+            }
+        }
+
+
+        }
+}
+    #Wait for jobs to complete
+    Start-Sleep -s 5
+    #Pull Jobs and update table
+    ForEach ($Row in $BaseTable){
+        if($null -ne $Row.IP){
+            $Job = Get-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) | Receive-Job
+            if($Job.Connected -eq $true){
+                $Row.Success ++
+                $Row.RTTinMS = $Job.RTT
+            }
+
+            if($Job.Connected -eq $false){
+                $Row.Failure ++
+            }
+            Get-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) | Remove-Job
+        }
+    }
+
+    $host.UI.RawUI.CursorPosition = $origpos
+
+
+    $UpCount ++
+    }until($Upcount -eq $Count )
+    usawritelog -LogLevel Information -EventID 1020 -Message $($Start + "`n" + $BaseTable)
+}
+
+try{
+    $LogCheck = [System.Diagnostics.EventLog]::SourceExists("UsagiTools")
+}
+catch{
+    usawritelog -Message "UsagiTools EventViewer source not found, this normally can be fixed by reimporting once as Admin to enable this otherwise logging will only happen locally in console. Error encountered:" -LogLevel Warning -EventID 1
+    usawritelog -Message $_ -LogLevel Error -EventID 0001 -Category WriteError -RecommendedAction "Re import once as Admin"
+}
+finally{
+    If(($LogCheck -eq $false -or $null -eq $LogCheck) -and $(Test-UsaAdministrator) -eq $true ){
+        try{
+            [System.Diagnostics.EventLog]::CreateEventSource("UsagiTools", "UsagiTools")
+            usawritelog -LogLevel Information -EventID 0 -Message "UsagiTools source added to Event Viewer, Event Viewer Service restart or device reboot may be required before writes properly show in log"
+        }
+        catch{
+        usawritelog -Message "Could not create UsagiTools Event source in Event Viewer, potential errors with logging to the Event Viewer may occur" -LogLevel Warning -EventID 0001
+        }
+    }
 }
