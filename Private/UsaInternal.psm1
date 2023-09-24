@@ -28,6 +28,8 @@ function usawritelog{
     1005: Teams Module was unable to install and import, manual import or reinstall module
     1010: No German Servers for this cmdlet exist per documentation as of writing
     1020: Output of Test-UsaNetwork
+    1021: Invalid Source Address IP or automatic detection failed and manual -source flag needed
+    1022: Could not find Adapter with Source Address IP given, verify an existing adapter has the IP provided
     2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license, consider cleaning from group
     2002: No German Servers for this cmdlet exist per documentation as of writing
     2010: Invalid group for Set-UsaDynamicGroupMember, validate group via get-adgroup

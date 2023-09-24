@@ -35,6 +35,8 @@ function usawritelog{
     1005: Teams Module was unable to install and import, manual import or reinstall module
     1010: No German Servers for this cmdlet exist per documentation as of writing
     1020: Output of Test-UsaNetwork
+    1021: Invalid Source Address IP or automatic detection failed and manual -source flag needed
+    1022: Could not find Adapter with Source Address IP given, verify an existing adapter has the IP provided
     2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license, consider cleaning from group
     2002: No German Servers for this cmdlet exist per documentation as of writing
     2010: Invalid group for Set-UsaDynamicGroupMember, validate group via get-adgroup
@@ -1189,7 +1191,7 @@ function Test-UsaNetwork{
     .EXAMPLE
         PS> Test-UsaNetwork -Gateway 10.0.0.1 -DNS 10.0.0.20,10.0.0.21
     .NOTES
-     Version 1.0.0
+     Version 1.0.1
 #>
 
     Param
@@ -1197,7 +1199,7 @@ function Test-UsaNetwork{
     [int]$Count,
     $Internal  = @(),
     $External  = @(),
-    [string]$Source,
+    [ipaddress]$Source,
     $Gateway   = @(),
     $DNS       = @(),
     [Switch]$SecureDNS
@@ -1231,12 +1233,20 @@ function Test-UsaNetwork{
         $SourceAddress = $Source
     }
     else{
-        $SourceAddress = (Test-NetConnection).SourceAddress.IPAddress
+            $SourceAddress = (Test-NetConnection).SourceAddress.IPAddress
     }
 
+    if($null -eq $SourceAddress){
+            usawritelog -LogLevel Error -EventID 1021 -Category ConnectionError -Message "ERROR: Cannot automatically set Source address, please select a Source Address and rerun" -RecommendedAction "Rerun with a -Source $IP where IP is a valid address for a local network adapter to ping from"
+            break
+    }
     #Build a default object for internal paths to test against
     $Adapter = Get-NetIPConfiguration | Where-Object {$_.IPv4Address.IPAddress -like $SourceAddress}
-
+    
+    if($null -eq $Adapter){
+            usawritelog -LogLevel Error -EventID 1022 -Category ConnectionError -Message $("ERROR: Cannot locate Adapter with source address " + $SourceAddress + " Please rerun with valid source address") -RecommendedAction "Rerun with a -Source $IP where IP is a valid address for a local network adapter to ping from"
+            break
+    }
 
     #Check Gateway object, if none provided use source object
     if($null -ne $Gateway -and $Gateway -notlike ""){
