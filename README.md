@@ -15,38 +15,49 @@ Current EventIDs:
 			1020: Output of Test-UsaNetwork
 			1021: Invalid Source Address IP or automatic detection failed and manual -source flag needed
 			1022: Could not find Adapter with Source Address IP given, verify an existing adapter has the IP provided
-			2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license, consider cleaning from group
-			2002: No German Servers for this cmdlet exist per documentation as of writing
+			2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license or entry is stale information to validate on (A User Rename can cause this), consider cleaning from group
+			2002: Somehow 2 users were found when checking object. Validate users
+			2003: User sendas perms from Trustee removed, if user is in the valid list of objects it will be readded with updated values
+			2009: Output for Set-UsaDynamic group citing group worked on
 			2010: Invalid group for Set-UsaDynamicGroupMember, validate group via get-adgroup
 			2011: Could not validate User OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
 			2012: Could not validate Computer OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
 			2013: Set-UsaDynamicGroupMember group validation error stating you're unable to nest a parent level group in a child
-		
+			2014: Could not import Active Directory Module
 
 Identity
 	Module for scripts related to identity systems (Active Directory, Azure Active Directory, Local Users etc) and the management of such systems (AAD Connect for example)
 	
 	Add-UsaUserSendasGlobally
-		.SYNOPSIS
-			Grants a User in Office 365 permission to send as ALL Licensed users. Good for global service accounts
+    .SYNOPSIS
+        Grants a User in Office 365 permission to send as ALL Licensed users. Good for global service accounts as a workaround for Applications that require it
 
-		.PARAMETER Trustee
-			Identity of user to gain full SendAs Rights
+    .PARAMETER Trustee
+        Identity of user to gain full SendAs Rights
 
-		.PARAMETER Credentials
-			PSCredential Object of a NON MFA Admin to log into Office 365 with. If no credentials are provided will log in by default in interactive mode for MFA Login
+    .PARAMETER Credentials
+        PSCredential Object of a NON MFA Admin to log into Office 365 with. If no credentials are provided will log in by default in interactive mode for MFA Login
 
-		.PARAMETER AzureEnvironmentName
-			Select Azure Environment to log into. Default is the normal AzureCloud environment, Alternative options are AzureChinaCloud, AzureGermanyCloud, and AzureUSGovernmentCloud. Options will select the same cloud as would be selected with Connect-AzureAD
+    .PARAMETER AzureEnvironmentName
+        Select Azure Environment to log into. Default is the normal AzureCloud environment, Alternative options are AzureChinaCloud, AzureGermanyCloud, and AzureUSGovernmentCloud. Options will select the same cloud as would be selected with Connect-AzureAD
 
-		.EXAMPLE
-			PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
+    .PARAMETER AddDistributionGroups
+        Add permissions to all Distribution groups as well
 
-		.EXAMPLE
-			PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net -Credentials $(Get-Credential)
+    .PARAMETER AddSharedMailboxes
+        Adds permissions to all Shared Mailboxes
 
-		.EXAMPLE
-			PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
+    .PARAMETER RemoveStaleEntries
+        Removes any users from the current set of permissions who aren't found in the existing pulled list of permissions, useful for when these entry lookups don't match with curent data (Like when a User changes their name)
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net -Credentials $(Get-Credential)
+
+    .EXAMPLE
+        PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
+
 
 	Set-UsaDynamicGroupMember
 

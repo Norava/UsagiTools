@@ -1,5 +1,5 @@
 ﻿#USAGI TOOLS MISC MODULE
-#VERSION 1.0.2
+#VERSION 1.1.2
 #Various Powershell tools designed to serve as either internal functions (labeled as usaverbNoun) Or otherwise misc functions
 #Module Event # 1000-1999
 
@@ -16,7 +16,7 @@ function Get-UsaPublicIP{
     .EXAMPLE
         PS> Get-UsaPublicIP -Computer Srv-DC1.Contoso.loc -Credential $(Get-Credential)
     .NOTES
-    Version 1.0.1
+    Version 1.1.0
 #>
 Param
 (
@@ -25,22 +25,35 @@ Param
 [ValidateNotNull()]
 $Credential = [System.Management.Automation.PSCredential]::Empty
 )
-#Standard use, check to see if the Compuer and credential flags aren't in use then run from local machine
-if(($null -eq $Computer -or $Computer -eq "") -and ($Credential -eq $([System.Management.Automation.PSCredential]::Empty) -or $Credential -eq "") ){
-    (Invoke-WebRequest http://api.ipify.org -UseBasicParsing).content}
-
-#Run against a Windows Device with the current user credentials
-elseif($null -ne $Computer -and $Credential -eq $([System.Management.Automation.PSCredential]::Empty) ){
-    Invoke-Command -ComputerName $Computer -ScriptBlock{
-        (Invoke-WebRequest http://api.ipify.org -UseBasicParsing).content}
+    #Standard use, check to see if the Compuer and credential flags aren't in use then run from local machine
+    if(($null -eq $Computer -or $Computer -eq "") -and ($Credential -eq $([System.Management.Automation.PSCredential]::Empty) -or $Credential -eq "") ){
+        #Run as a job to force PoSh to make a new session each time to avoid one layer of caching issues
+        $JobBase = ((New-Guid).Guid | Out-String).Replace("-","").Substring(0,10)
+        Start-Job -Name $("UsaPubIP_" + $JobBase) -ScriptBlock {(Invoke-RestMethod -Uri 'https://api.ipify.org?format=json' -Headers @{"Cache-Control"="no-cache"}).ip} | Out-Null
+        Get-Job -Name $("UsaPubIP_" + $JobBase) | Wait-Job | Out-Null
+        Get-Job -Name $("UsaPubIP_" + $JobBase) | Receive-Job
+    }
+    #Run against a Windows Device with the current user credentials
+    elseif($null -ne $Computer -and $Credential -eq $([System.Management.Automation.PSCredential]::Empty) ){
+        Invoke-Command -ComputerName $Computer -ScriptBlock{
+            #Run as a job to force PoSh to make a new session each time to avoid one layer of caching issues
+            $JobBase = ((New-Guid).Guid | Out-String).Replace("-","").Substring(0,10)
+            Start-Job -Name $("UsaPubIP_" + $JobBase) -ScriptBlock {(Invoke-RestMethod -Uri 'https://api.ipify.org?format=json' -Headers @{"Cache-Control"="no-cache"}).ip} | Out-Null
+            Get-Job -Name $("UsaPubIP_" + $JobBase) | Wait-Job | Out-Null
+            Get-Job -Name $("UsaPubIP_" + $JobBase) | Receive-Job
         }
+    }
 
-#Run against a Windows Device with arbitrary credentials
-elseif($null -ne $Computer -and $Credential -ne $([System.Management.Automation.PSCredential]::Empty) -and $null -ne $Credential){
-    Invoke-Command -ComputerName $Computer -Credential $Credential -ScriptBlock{
-       (Invoke-WebRequest http://api.ipify.org -UseBasicParsing).content}
+    #Run against a Windows Device with arbitrary credentials
+    elseif($null -ne $Computer -and $Credential -ne $([System.Management.Automation.PSCredential]::Empty) -and $null -ne $Credential){
+        Invoke-Command -ComputerName $Computer -Credential $Credential -ScriptBlock{
+            #Run as a job to force PoSh to make a new session each time to avoid one layer of caching issues
+            $JobBase = ((New-Guid).Guid | Out-String).Replace("-","").Substring(0,10)
+            Start-Job -Name $("UsaPubIP_" + $JobBase) -ScriptBlock {(Invoke-RestMethod -Uri 'https://api.ipify.org?format=json' -Headers @{"Cache-Control"="no-cache"}).ip} | Out-Null
+            Get-Job -Name $("UsaPubIP_" + $JobBase) | Wait-Job | Out-Null
+            Get-Job -Name $("UsaPubIP_" + $JobBase) | Receive-Job
         }
-
+    }
 }
 
 
@@ -263,7 +276,7 @@ Process{
             do{$ModImport = usamoduleimport -modulerequested "PnP.Powershell" -moduleset O365}
             until($ModImport -le 1)
 
-            Write-Outputusawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting Sharepoint PNP Login to $SharepointPNPLibraryURI"
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting Sharepoint PNP Login to $SharepointPNPLibraryURI"
 
             if($ModImport -eq 1){
             #Check if the required module is imported and if not install it

@@ -30,13 +30,15 @@ function usawritelog{
     1020: Output of Test-UsaNetwork
     1021: Invalid Source Address IP or automatic detection failed and manual -source flag needed
     1022: Could not find Adapter with Source Address IP given, verify an existing adapter has the IP provided
-    2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license, consider cleaning from group
-    2002: No German Servers for this cmdlet exist per documentation as of writing
+    2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license or entry is stale information to validate on (A User Rename can cause this), consider cleaning from group
+    2002: Somehow 2 users were found when checking object. Validate users
+    2003: User sendas perms from Trustee removed, if user is in the valid list of objects it will be readded with updated values
+    2009: Output for Set-UsaDynamic group citing group worked on
     2010: Invalid group for Set-UsaDynamicGroupMember, validate group via get-adgroup
     2011: Could not validate User OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
     2012: Could not validate Computer OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
     2013: Set-UsaDynamicGroupMember group validation error stating you're unable to nest a parent level group in a child
-
+    2014: Could not import Active Directory Module
 #>
     Param(
     [Parameter(Mandatory = $true)]
@@ -115,7 +117,7 @@ function usamoduleimport{
 #>
         Param(
         [string]$modulerequested,
-        [ValidateSet('O365')]
+        [ValidateSet('O365','ActiveDirectory')]
         [string[]]
         $moduleset
         )
@@ -126,8 +128,10 @@ function usamoduleimport{
             $installmod = $Host.UI.PromptForChoice("Install Module?","Module $modulerequested not found, proceed with installation?",$Choices,1)
             if($installmod -eq 0){
             #If we want to install the module install based off the ModuleSet
-                if($moduleset -eq "O365"){
-                    Install-UsaOffice365Module -Module $modulerequested
+                switch ($moduleset) {
+                    O365 { Install-UsaOffice365Module -Module $modulerequested }
+                    ActiveDirectory {Install-WindowsFeature -Name "RSAT-AD-PowerShell" -IncludeAllSubFeature } 
+                    Default {}
                 }
             #Attempt to import the newly Downloaded Module
                 try{

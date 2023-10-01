@@ -18,6 +18,14 @@ function Add-UsaUserSendasGlobally{
     .PARAMETER AzureEnvironmentName
         Select Azure Environment to log into. Default is the normal AzureCloud environment, Alternative options are AzureChinaCloud, AzureGermanyCloud, and AzureUSGovernmentCloud. Options will select the same cloud as would be selected with Connect-AzureAD
 
+    .PARAMETER AddDistributionGroups
+        Add permissions to all Distribution groups as well
+
+    .PARAMETER AddSharedMailboxes
+        Adds permissions to all Shared Mailboxes
+
+    .PARAMETER RemoveStaleEntries
+        Removes any users from the current set of permissions who aren't found in the existing pulled list of permissions, useful for when these entry lookups don't match with curent data (Like when a User changes their name)
     .EXAMPLE
         PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
 
@@ -41,7 +49,10 @@ function Add-UsaUserSendasGlobally{
 
     [ValidateSet('AzureCloud','AzureChinaCloud','AzureGermanyCloud','AzureUSGovernment')]
     [string[]]
-    $AzureEnvironmentName = "AzureCloud"
+    $AzureEnvironmentName = "AzureCloud",
+    [switch]$AddDistributionGroups,
+    [switch]$AddSharedMailboxes,
+    [switch]$RemoveStaleEntries
 
     )
 
@@ -56,23 +67,50 @@ function Add-UsaUserSendasGlobally{
 
     usawritelog  -Message "Gathering Users list, please wait" -LogLevel SuccessAudit -EventID 1000
 
-    [System.Collections.ArrayList]$Users = Get-MsolUser -All | Where-Object{$_.IsLicensed -eq $True}
-    $CurrentPerms = Get-RecipientPermission -Trustee $Trustee
+    usawritelog  -Message "Gathering Users list, please wait" -LogLevel SuccessAudit -EventID 1000
 
+    [System.Collections.ArrayList]$Users = Get-MsolUser -All  | Where-Object{$_.IsLicensed -eq $True}
+    if($AddDistributionGroups -or $AddSharedMailboxes){
+        [System.Collections.ArrayList]$Extras = @()
+    }
+    if($AddDistributionGroups){Get-DistributionGroup -Filter * | ForEach-Object { 
+        $Extras.Add($_.PrimarySMTPAddress)} | Out-Null
+    }
+    if($AddSharedMailboxes){
+        Get-Mailbox -GroupMailbox -Filter * | ForEach-Object { $Extras.Add($_.PrimarySMTPAddress)} | Out-Null
+    }
+    
+    $CurrentPerms = Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited
     #Take all users in CurrentPerms and remove them from the Users Object so we don't push duplicate permissions
     usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Cleaning Permission Object"
     $CurrentPerms | ForEach-Object{
         #For each user check if it's in the Users Object locally and save that as a value
-        $usertoremove = $_.Identity
         #Get the object from our $Users MSOnline based object if it exists, due to varying Identity vales checks  DisplayName, ObjectID, SamAccountName,  UserPrincipalName
-        $remove = $Users | Where-Object{$_.DisplayName -like "$usertoremove" -OR $_.ObjectID -eq "$usertoremove" -OR  $_.UserPrincipalName.Split('@')[0] -like $usertoremove -OR  $_.UserPrincipalName -like $usertoremove}
-        #Check if it's 1 object, if -batch is on and we get 2 just skip the user and log it
-        if($null -eq $remove){
-            usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove NOT FOUND"
+        $usertoremove = $_.Identity
+    
+        $UserRemove = $Users | Where-Object{$_.DisplayName -like "$usertoremove" -OR $_.ObjectID -eq "$usertoremove" -OR  $_.UserPrincipalName.Split('@')[0] -like $usertoremove -OR  $_.UserPrincipalName -like $usertoremove}
+    $ExtrasRemove = $Extras |Where-Object    -like $usertoremove
+        #Check both objects and verify only 1 object exists then remove from the add list so it's not readded
+        if(($null -eq $UserRemove -or $UserRemove -eq "")  -and $RemoveStaleEntries){ #Check if Users list exists and remove the old entry for readd later
+            usawritelog -LogLevel Warning -EventID 2003 -Message "$usertoremove not found, removing permission"
+            Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited -Identity $usertoremove | Remove-RecipientPermission -Confirm:$False
+        }
+        elseif($null -eq $UserRemove -or $UserRemove -eq ""){
+            usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove not found in active recipients, please run with the -RemoveStaleEntries flag to attempt to remove if invalid and rebuild if stale"
             #Put it on a log list if that's on
         }
-        elseif($remove.count -eq 1){
-            $Users.Remove($remove) #Remove object from list
+        elseif($UserRemove.count -eq 1){ #Remove object from list
+            $Users.Remove($UserRemove)
+        }
+        elseif(($null -eq $ExtrasRemove -or $ExtrasRemove -like "") -and $RemoveStaleEntries){
+            usawritelog -LogLevel Warning -EventID 2003 -Message "$usertoremove not found, removing permission"
+            Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited -Identity $usertoremove | Remove-RecipientPermission -Confirm:$False
+        }
+        elseif($null -eq $ExtrasRemove){
+            usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove not found in active recipients, please run with the -RemoveStaleEntries flag to attempt to remove if invalid and rebuild if stale"
+        }
+        elseif($ExtrasRemove.count -eq 1){ #Remove object from list
+            $Users.Remove($ExtrasRemove)
         }
         else{
             usawritelog -LogLevel Warning -EventID 2002 -Message $("The following users were found but will not be removed from existing adds, expect errors
@@ -163,146 +201,166 @@ function Set-UsaDynamicGroupMember{
             $TableRow | Add-Member  -Type NoteProperty -Name "AddType" -Value $AddType
             return $TableRow
     }
-    #Validate Params are correct
 
-    #Check that Identity group exists, if not terminate
-    $IdentityObject = get-adgroup $Identity
-    if($null -eq $IdentityObject -or $IdentityObject -eq ""){
-        usawritelog -LogLevel Error -EventID 2010 -Message "NO GROUP NAMED $Identity FOUND, ENDING SCRIPT" -RecommendedAction "Check your target AD Group and try again" -Category InvalidArgument
-        break
-    }
+    #Import AD Module
+    $ModImport = $null
 
-    #Are the OUs OUs?
-        #Users
-    if($null -ne $UsersOU -and $UsersOU -ne ""){
-        $UsersOU  | ForEach-Object{
-            try {
-                Get-ADOrganizationalUnit $_ | Out-Null
-            }
-            catch{
-                usawritelog -LogLevel Warning -EventID 2011 -Message "An error occured validating a User OU:"
-                Write-Error $_
-                break
-            }
-        }
+    #Check if the AD module is imported and if not install it
+    do{
+        $ModImport = usamoduleimport -modulerequested "ActiveDirectory" -moduleset ActiveDirectory
     }
-        #Computers
-    if($null -ne $ComputersOU -and $ComputersOU -ne ""){
-        $ComputersOU  | ForEach-Object{
-            try {
-                Get-ADOrganizationalUnit $_ | out-null
-            }
-            catch{
-                usawritelog -LogLevel Warning -EventID 2012 -Message "An error occured validating a Computer OU:"
-                Write-Error $_
-                break
-            }
-        }
-    }
+    until($ModImport -le 1)
 
-    #Create base object to define list of who we're inputing
-    $Table = @()
-
-    #If UserOU is null skip
-    if($null -eq $UsersOU -or $UsersOU -eq ""){
-        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No User OU selected, Skipping"
+    usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting AzureAD Login"
+    if($ModImport -eq 0){
+        usawritelog -LogLevel Error -EventID 2014 -Category NotInstalled -Message "Could not import ActiveDirectory Module please install and try again"
+        Break
     }
-    #Else look up all User Objects in OU and add to baseobject
+        #Module imported lets go
     else{
-        $UsersOU | ForEach-Object{
-            Get-ADUser -SearchBase $_ -Filter *  | ForEach-Object{
-                $Table += addtoTable -AddType "UserOU"
-            }
+        #Validate Params are correct
+        
+        #Check that Identity group exists, if not terminate
+        $IdentityObject = get-adgroup $Identity
+        if($null -eq $IdentityObject -or $IdentityObject -eq ""){
+            usawritelog -LogLevel Error -EventID 2010 -Message "NO GROUP NAMED $Identity FOUND, ENDING SCRIPT" -RecommendedAction "Check your target AD Group and try again" -Category InvalidArgument
+            break
         }
-    }
-    #If ComputerOU is null skip
-    if($null -eq $ComputersOU -or $ComputersOU -eq ""){
-        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Computer OU selected, Skipping"
-    }
-
-    #Else look up all Computer objects in OU and add to baseobject
-    else{
-        $ComputersOU | ForEach-Object{
-            Get-ADComputer -SearchBase $_ -Filter * | ForEach-Object{
-                $Table += addtoTable -AddType "ComputerOU"
-            }
+        else{
+            usawritelog -LogLevel Information -EventID 2009 -Message "Starting Group Rebuild for $Identity"
         }
-    }
-    #Add any manual Users and Computers
-    if($null -eq $Users -or $Users -eq ""){
-        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Extra Users selected, Skipping"
-    }
-    #Else look up all User Objects and add to baseobject
-    else{
-        $Users | ForEach-Object{
-                    Get-ADUser -Identity $_ |ForEach-Object{ #I cannot conceivably think of any reason the identity field would somehow even LET more than 1 user exist for this and if it does your AD is cursed but it makes it easier to put it here LOL
-                            $Table += addtoTable -AddType "ExtraUsers"
-                    }
+        #Are the OUs OUs?
+            #Users
+        if($null -ne $UsersOU -and $UsersOU -ne ""){
+            $UsersOU  | ForEach-Object{
+                try {
+                    Get-ADOrganizationalUnit $_ | Out-Null
                 }
-    }
-    if($null -eq $Computers -or $Computers -eq ""){
-        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Extra Computers selected, Skipping"
-    }
-    #Else look up all User Objects and add to baseobject
-    else{
-        $Computers | ForEach-Object{
-                    Get-ADComputers -Identity $_ |ForEach-Object{ #I cannot conceivably think of any reason the identity field would somehow even LET more than 1 VALID computer exist for this and if it does your AD is cursed but it makes it easier to put it here LOL
-                            $Table += addtoTable -AddType "ExtraComputers"
-                    }
+                catch{
+                    usawritelog -LogLevel Warning -EventID 2011 -Message "An error occured validating a User OU:"
+                    Write-Error $_
+                    break
                 }
-    }
+            }
+        }
+            #Computers
+        if($null -ne $ComputersOU -and $ComputersOU -ne ""){
+            $ComputersOU  | ForEach-Object{
+                try {
+                    Get-ADOrganizationalUnit $_ | out-null
+                }
+                catch{
+                    usawritelog -LogLevel Warning -EventID 2012 -Message "An error occured validating a Computer OU:"
+                    Write-Error $_
+                    break
+                }
+            }
+        }
 
-    #Add any manual groups to add
-    if($null -eq $Group -or $Group -eq ""){Write-Output "No Extra Groups selected, Skipping"}
-    #Else look up all User Objects and add to baseobject
-    else{
-        $Group | ForEach-Object{
-                    Get-ADGroup -Identity $_ |ForEach-Object{ #I cannot conceivably think of any reason the identity field would somehow even LET more than 1 user exist for this and if it does your AD is cursed but it makes it easier to put it here LOL
-                        if($IdentityObject.GroupScope.value__ -ge $_.GroupScope.value__){
-                            $Table += addtoTable -AddType "ExtraGroup"
-                        }
-                        if($IdentityObject.GroupScope.value__ -lt $_.GroupScope.value__){
-                            usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Group " + $_.Name + " with GUID " + $_.ObjectGUID + " cannot be nested in Group " + $Identity.name + " with GUID of " + $Identity.Object + " GUID as it's Group Scope is " + $_.GroupScope + " while target group is $Identity.GroupScope . Skipping.")
+        #Create base object to define list of who we're inputing
+        $Table = @()
+
+        #If UserOU is null skip
+        if($null -eq $UsersOU -or $UsersOU -eq ""){
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No User OU selected, Skipping"
+        }
+        #Else look up all User Objects in OU and add to baseobject
+        else{
+            $UsersOU | ForEach-Object{
+                Get-ADUser -SearchBase $_ -Filter *  | ForEach-Object{
+                    $Table += addtoTable -AddType "UserOU"
+                }
+            }
+        }
+        #If ComputerOU is null skip
+        if($null -eq $ComputersOU -or $ComputersOU -eq ""){
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Computer OU selected, Skipping"
+        }
+
+        #Else look up all Computer objects in OU and add to baseobject
+        else{
+            $ComputersOU | ForEach-Object{
+                Get-ADComputer -SearchBase $_ -Filter * | ForEach-Object{
+                    $Table += addtoTable -AddType "ComputerOU"
+                }
+            }
+        }
+        #Add any manual Users and Computers
+        if($null -eq $Users -or $Users -eq ""){
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Extra Users selected, Skipping"
+        }
+        #Else look up all User Objects and add to baseobject
+        else{
+            $Users | ForEach-Object{
+                        Get-ADUser -Identity $_ |ForEach-Object{ #I cannot conceivably think of any reason the identity field would somehow even LET more than 1 user exist for this and if it does your AD is cursed but it makes it easier to put it here LOL
+                                $Table += addtoTable -AddType "ExtraUsers"
                         }
                     }
-                }
-    }
-
-    #Add all objects from a custom Searchstring
-    if($null -eq $SearchString -or $SearchString -eq ""){
-        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Search String added, Skipping"
-    }
-
-    #Else look up all objects matching your filter string and add to baseobject
-    else{
-        Get-ADObject -Filter $SearchString | Where-Object{$_.objectclass -eq 'user' -or $_.objectclass -eq 'computer' -or $_.objectclass -eq 'group'} | ForEach-Object{
-            if($_.objectclass -eq 'group'){
-                $SSValidateGroup = Get-ADGroup $_.ObjectGUID
-                if($IdentityObject.GroupScope.value__ -ge $SSValidateGroup.GroupScope.value__){
-                    $Table += addtoTable -AddType "SearchString"
-                }
-                if($IdentityObject.GroupScope.value__ -lt $SSValidateGroup.GroupScope.value__){
-                    usawritelog -LogLevel Warning -EventID 2013 -Message $("Group " + $SSValidateGroup.Name + " with GUID " + $SSValidateGroup.ObjectGUID + " cannot be nested in Group " + $IdentityObject.Name + " with GUID of " + $IdentityObject.ObjectGUID + " as it's Group Scope is " + $SSValidateGroup.GroupScope + " while target group is " + $IdentityObject.GroupScope + ". Skipping.")
-                }
-            }
-                else{
-                    $Table += addtoTable -AddType "SearchString"
-                }
         }
-    }
+        if($null -eq $Computers -or $Computers -eq ""){
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Extra Computers selected, Skipping"
+        }
+        #Else look up all User Objects and add to baseobject
+        else{
+            $Computers | ForEach-Object{
+                        Get-ADComputers -Identity $_ |ForEach-Object{ #I cannot conceivably think of any reason the identity field would somehow even LET more than 1 VALID computer exist for this and if it does your AD is cursed but it makes it easier to put it here LOL
+                                $Table += addtoTable -AddType "ExtraComputers"
+                        }
+                    }
+        }
 
-    #Output baseobject if OutputPath is provided with timestamp on the files
-    if($null -ne $OutputPath -and $OutputPath -ne ""){
-        $Table | Export-Csv -Path $OutputPath
-        usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Exported list of users added to " + $IdentityObject.Name + " to $OutputPath")
+        #Add any manual groups to add
+        if($null -eq $Group -or $Group -eq ""){Write-Output "No Extra Groups selected, Skipping"}
+        #Else look up all User Objects and add to baseobject
+        else{
+            $Group | ForEach-Object{
+                        Get-ADGroup -Identity $_ |ForEach-Object{ #I cannot conceivably think of any reason the identity field would somehow even LET more than 1 user exist for this and if it does your AD is cursed but it makes it easier to put it here LOL
+                            if($IdentityObject.GroupScope.value__ -ge $_.GroupScope.value__){
+                                $Table += addtoTable -AddType "ExtraGroup"
+                            }
+                            if($IdentityObject.GroupScope.value__ -lt $_.GroupScope.value__){
+                                usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Group " + $_.Name + " with GUID " + $_.ObjectGUID + " cannot be nested in Group " + $Identity.name + " with GUID of " + $Identity.Object + " GUID as it's Group Scope is " + $_.GroupScope + " while target group is $Identity.GroupScope . Skipping.")
+                            }
+                        }
+                    }
+        }
+
+        #Add all objects from a custom Searchstring
+        if($null -eq $SearchString -or $SearchString -eq ""){
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "No Search String added, Skipping"
+        }
+
+        #Else look up all objects matching your filter string and add to baseobject
+        else{
+            Get-ADObject -Filter $SearchString | Where-Object{$_.objectclass -eq 'user' -or $_.objectclass -eq 'computer' -or $_.objectclass -eq 'group'} | ForEach-Object{
+                if($_.objectclass -eq 'group'){
+                    $SSValidateGroup = Get-ADGroup $_.ObjectGUID
+                    if($IdentityObject.GroupScope.value__ -ge $SSValidateGroup.GroupScope.value__){
+                        $Table += addtoTable -AddType "SearchString"
+                    }
+                    if($IdentityObject.GroupScope.value__ -lt $SSValidateGroup.GroupScope.value__){
+                        usawritelog -LogLevel Warning -EventID 2013 -Message $("Group " + $SSValidateGroup.Name + " with GUID " + $SSValidateGroup.ObjectGUID + " cannot be nested in Group " + $IdentityObject.Name + " with GUID of " + $IdentityObject.ObjectGUID + " as it's Group Scope is " + $SSValidateGroup.GroupScope + " while target group is " + $IdentityObject.GroupScope + ". Skipping.")
+                    }
+                }
+                    else{
+                        $Table += addtoTable -AddType "SearchString"
+                    }
+            }
+        }
+
+        #Output baseobject if OutputPath is provided with timestamp on the files
+        if($null -ne $OutputPath -and $OutputPath -ne ""){
+            $Table | Export-Csv -Path $OutputPath
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Exported list of users added to " + $IdentityObject.Name + " to $OutputPath")
+        }
+        #Pause script for review if Debug is enabled
+        if($PauseAtEnd -eq $true){
+            usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Displaying Object for review"
+            $Table | Format-Table
+            timeout /t -1
+        }
+        #Add all users in baseobject to group defined by identity
+        Get-ADGroup -Identity $IdentityObject | Set-ADGroup -Clear member
+        Add-ADGroupMember -Identity $IdentityObject -Members $Table.ObjectGUID
     }
-    #Pause script for review if Debug is enabled
-    if($PauseAtEnd -eq $true){
-        usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Displaying Object for review"
-        $Table | Format-Table
-        timeout /t -1
-    }
-    #Add all users in baseobject to group defined by identity
-    Get-ADGroup -Identity $IdentityObject | Set-ADGroup -Clear member
-    Add-ADGroupMember -Identity $IdentityObject -Members $Table.ObjectGUID
 }

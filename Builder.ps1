@@ -29,6 +29,6 @@ finally{
 Remove-Item .\UsagiTools.psm1
 New-Item UsagiTools.psm1
 $Base | Add-Content .\UsagiTools.psm1
-gci .\Private -filter *.psm1 | Get-Content | Add-Content .\UsagiTools.psm1
-gci .\Public -filter *.psm1 | sort Name | Get-Content | Add-Content .\UsagiTools.psm1
+Get-ChildItem .\Private -filter *.psm1 | Get-Content | Add-Content .\UsagiTools.psm1
+Get-ChildItem .\Public -filter *.psm1 | Sort-Object Name | Get-Content | Add-Content .\UsagiTools.psm1
 $End | Add-Content .\UsagiTools.psm1
