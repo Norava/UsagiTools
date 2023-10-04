@@ -513,7 +513,7 @@ function Test-UsaNetwork{
     .EXAMPLE
         PS> Test-UsaNetwork -Gateway 10.0.0.1 -DNS 10.0.0.20,10.0.0.21
     .NOTES
-     Version 1.0.1
+     Version 1.0.2
 #>
 
     Param
@@ -795,7 +795,7 @@ function Test-UsaNetwork{
             if($Job.Connected -eq $false){
                 $Row.Failure ++
             }
-            Get-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) | Remove-Job
+            Get-Job -Name $("Usa-" + $Row.ID + "_" + $JobBase) | Remove-Job -Force
         }
     }
 

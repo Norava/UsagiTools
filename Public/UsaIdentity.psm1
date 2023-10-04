@@ -36,7 +36,7 @@ function Add-UsaUserSendasGlobally{
         PS> Add-UsaUserSendasGlobally -Trustee CRMDE@contoso.net -Credentials $(Get-Credential) -AzureEnvironmentName AzureGermanyCloud
 
     .NOTES
-        VERSION 1.0.2
+        VERSION 1.1.0
     #>
 
     param(
@@ -67,59 +67,81 @@ function Add-UsaUserSendasGlobally{
 
     usawritelog  -Message "Gathering Users list, please wait" -LogLevel SuccessAudit -EventID 1000
 
-    usawritelog  -Message "Gathering Users list, please wait" -LogLevel SuccessAudit -EventID 1000
-
-    [System.Collections.ArrayList]$Users = Get-MsolUser -All  | Where-Object{$_.IsLicensed -eq $True}
-    if($AddDistributionGroups -or $AddSharedMailboxes){
-        [System.Collections.ArrayList]$Extras = @()
-    }
-    if($AddDistributionGroups){Get-DistributionGroup -Filter * | ForEach-Object { 
-        $Extras.Add($_.PrimarySMTPAddress)} | Out-Null
-    }
-    if($AddSharedMailboxes){
-        Get-Mailbox -GroupMailbox -Filter * | ForEach-Object { $Extras.Add($_.PrimarySMTPAddress)} | Out-Null
+    #Create our base object of recipients using get-msoluser for a 100x or more speed increase, this will be slightly less accurate during the cleanup phase of this object but will ultimately take the whole cmdlet down to a few minutes with 1000 users after initial run provided recipient objects in your environment MOSTLY match the "Name" property with the "Display Name" Property
+    [System.Collections.ArrayList]$Recipients = Get-MsolUser -All | Where-Object{$_.IsLicensed -eq $true -and $($_.Licenses.ServiceStatus | Where-Object{$_.ServicePlan.ServiceName -match "EXCHANGE"}).ProvisioningStatus -match "success"}
+    
+    #Add any Distribution Groups that are active if flagged to the same Recipients table above with modified Key names for select variables to have a single consistent object for easy looping
+    if($AddDistributionGroups){
+        Get-DistributionGroup -Filter * | ForEach-Object { 
+            $Recipients.Add([PSCustomObject]@{'DisplayName'=$_.Name; 'UserPrincipalName' = $_.PrimarySMTPAddress; 'ObjectID'=$_.ExternalDirectoryObjectId})
+        } | Out-Null
     }
     
-    $CurrentPerms = Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited
+    #Add any Shared Mailboxes that are active if flagged to the same Recipients table above with modified Key names for select Variables to have a single consistent object for easy looping
+    if($AddSharedMailboxes){
+        Get-Mailbox -GroupMailbox -RecipientTypeDetails GroupMailbox,RoomMailbox,SchedulingMailbox,SharedMailbox  -Filter * | ForEach-Object {
+            $Recipients.Add([PSCustomObject]@{'DisplayName'=$_.Name; 'UserPrincipalName' = $_.PrimarySMTPAddress; 'ObjectID'=$_.ExternalDirectoryObjectId})
+        } | Out-Null
+    }
+    
+    usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Gathering current Trustee $Trustee permissions, this may take awhile"
+    #Get all current perms for users
+    $CurrentPerms = Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited | Sort-Object Identity
+    
     #Take all users in CurrentPerms and remove them from the Users Object so we don't push duplicate permissions
     usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Cleaning Permission Object"
     $CurrentPerms | ForEach-Object{
         #For each user check if it's in the Users Object locally and save that as a value
+    
         #Get the object from our $Users MSOnline based object if it exists, due to varying Identity vales checks  DisplayName, ObjectID, SamAccountName,  UserPrincipalName
         $usertoremove = $_.Identity
     
-        $UserRemove = $Users | Where-Object{$_.DisplayName -like "$usertoremove" -OR $_.ObjectID -eq "$usertoremove" -OR  $_.UserPrincipalName.Split('@')[0] -like $usertoremove -OR  $_.UserPrincipalName -like $usertoremove}
-    $ExtrasRemove = $Extras |Where-Object    -like $usertoremove
-        #Check both objects and verify only 1 object exists then remove from the add list so it's not readded
-        if(($null -eq $UserRemove -or $UserRemove -eq "")  -and $RemoveStaleEntries){ #Check if Users list exists and remove the old entry for readd later
+        #Search through our recipients list to find any users who are already validly permissed objects. Clean up and research twice on Displayname as some objects in the $CurrentPerms object on Add will have two spaces in the DisplayName that cmdlets used for $Recipients lacks
+        $Remove = $Recipients | Where-Object{$_.DisplayName -like "$usertoremove" -OR `
+                                            $_.ObjectID -eq "$usertoremove" -OR  `
+                                            $_.UserPrincipalName.Split('@')[0] -like $usertoremove -OR `
+                                            $_.UserPrincipalName -like $usertoremove -OR `
+                                            $_.DisplayName.replace("  "," ") -like $usertoremove
+                                }
+    
+        #If Remove object contains our user to remove remove them from their respective tables
+        if($($Remove | Measure-Object).Count -eq 1){ #Remove object from list
+            $Recipients.Remove($Remove)
+        }
+        #If Remove Object contains nothing perform the (MUCH) slower ExchangeOnline based check for the valid permission's user so we can get it's relevant ObjectID
+        elseif(($null -eq $Remove -or $Remove -eq "") -and ($RemoveStaleEntries -eq $false -or $null -eq $RemoveStaleEntries)){
+            $SecondStageRemove = $null
+            $SecondStageRemove = Get-Recipient $_
+            #Which if it exists remove it (As it should)
+            if($null -ne $SecondStageRemove){
+                $Remove = $Recipients | Where-Object{$_.ObjectID -like $SecondStageRemove.ExternalDirectoryObjectId}
+                $Recipients.Remove($Remove)
+            }
+            #Otherwise we can assume there may be issue with the obect permission and can alert the user to rerun with -RemoveStaleEntries to remove it, this MAY fix the issue but 
+            else{
+                usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove not found in active recipients, please run with the -RemoveStaleEntries flag to attempt to remove if invalid and rebuild if stale"
+            }
+        }
+        #If Remove is null AND we're removing stale users simply remove the existing permission, if a valid recipient for it exists it will be recreated on add
+        elseif(($null -eq $Remove -or $Remove -eq "") -and $RemoveStaleEntries){
             usawritelog -LogLevel Warning -EventID 2003 -Message "$usertoremove not found, removing permission"
             Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited -Identity $usertoremove | Remove-RecipientPermission -Confirm:$False
         }
-        elseif($null -eq $UserRemove -or $UserRemove -eq ""){
-            usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove not found in active recipients, please run with the -RemoveStaleEntries flag to attempt to remove if invalid and rebuild if stale"
-            #Put it on a log list if that's on
+        #If for some reason multiple objects come back note them to disregard
+        elseif($($Remove | Measure-Object).Count -ge 2){
+            usawritelog -LogLevel Warning -EventID 2002 -Message $("Multiple potential Receipients are listed in existing permissions for $Trustee. Will attempt to readd to gurantee all objects have permissions. Consider manually removing permissions from the following and rerunning script to have permissions be added as GUIDS 
+            "+ $Remove)
         }
-        elseif($UserRemove.count -eq 1){ #Remove object from list
-            $Users.Remove($UserRemove)
-        }
-        elseif(($null -eq $ExtrasRemove -or $ExtrasRemove -like "") -and $RemoveStaleEntries){
-            usawritelog -LogLevel Warning -EventID 2003 -Message "$usertoremove not found, removing permission"
-            Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited -Identity $usertoremove | Remove-RecipientPermission -Confirm:$False
-        }
-        elseif($null -eq $ExtrasRemove){
-            usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove not found in active recipients, please run with the -RemoveStaleEntries flag to attempt to remove if invalid and rebuild if stale"
-        }
-        elseif($ExtrasRemove.count -eq 1){ #Remove object from list
-            $Users.Remove($ExtrasRemove)
-        }
+        #Standard "Stuff broke please tell me" message
         else{
-            usawritelog -LogLevel Warning -EventID 2002 -Message $("The following users were found but will not be removed from existing adds, expect errors
-            "+ $remove)
+            usawritelog -LogLevel Error -EventID 2005 -Category InvalidData -Message $("Error when removing known permission from list, expect errors and please report this via https://github.com/Norava/UsagiTools/ . Object Details:
+            " + $($Remove | Select-Object *))
         }
     }
-
+    #Then add all the new perms
     usawritelog -LogLevel SuccessAudit -EventID 0 -Message $("Adding permissions for " + $Trustee)
-    $Users | ForEach-Object{
+    $Recipients | Sort-Object UserPrincipalName | ForEach-Object{
+        usawritelog -LogLevel SuccessAudit -EventID 2004 -Message $("Adding Permission for $Trustee to SendAs " + $_.DisplayName + " with ObjectID of " + $_.ObjectID )
         Add-RecipientPermission -Identity $_.ObjectID -Trustee $Trustee -AccessRights SendAs  -Confirm:$false
     }
 }

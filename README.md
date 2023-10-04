@@ -4,6 +4,7 @@ Simple Scripts to get random things done. Most if not all cmdlets are documented
 Script for many modules logs information an UsagiTools log source for automation against log. 
 
 Current EventIDs:
+
 			EventID
 			0   : Verbose audit message
 			1001: Azure AD Module was unable to install and import, manual import or reinstall module
@@ -18,6 +19,7 @@ Current EventIDs:
 			2001: User couldn't be added via Add-UsaUserSendasGlobally 's Get-ReciepientPermission -trustee $Trustee. User possibly is manually set without a license or entry is stale information to validate on (A User Rename can cause this), consider cleaning from group
 			2002: Somehow 2 users were found when checking object. Validate users
 			2003: User sendas perms from Trustee removed, if user is in the valid list of objects it will be readded with updated values
+			2004: User sendas perms from Trustee Added
 			2009: Output for Set-UsaDynamic group citing group worked on
 			2010: Invalid group for Set-UsaDynamicGroupMember, validate group via get-adgroup
 			2011: Could not validate User OU to add for Set-UsaDynamicGroupMember, validate via Get-ADOrganizationUnit
