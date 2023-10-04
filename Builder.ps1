@@ -25,6 +25,11 @@ finally{
         usawritelog -Message "Could not create UsagiTools Event source in Event Viewer, potential errors with logging to the Event Viewer may occur" -LogLevel Warning -EventID 0001
         }
     }
+$LatestVer = Find-Module UsagiTools -ErrorAction SilentlyContinue
+$CurrentVer = Get-Module -ListAvailable UsagiTools | Sort-Object Version
+if($Currentver[-1].Version -lt $LatestVer.Version){
+    usawritelog -LogLevel Warning -EventID 1 -Message $("New Version of UsagiTools is available, please run Update-Module UsagiTools as an admin  to update your version " + $CurrentVer[-1].Version + " to " + $LatestVer.Version)
+}
 }'
 Remove-Item .\UsagiTools.psm1
 New-Item UsagiTools.psm1

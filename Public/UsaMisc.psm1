@@ -432,8 +432,8 @@ function Install-UsaOffice365Module{
 
 Param
 (
-    [ValidateSet("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","Teams")]
-    [string[]]$Module=("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","Teams"),
+    [ValidateSet("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","MicrosoftTeams")]
+    [string[]]$Module=("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","MicrosoftTeams"),
     [switch]$Update
 )
 
@@ -471,7 +471,7 @@ if($Module -contains "SharePointPnP"){
         usawritelog -LogLevel SuccessAudit -EventID 0 -Message "SharePointPnP Module already installed, Skipping"
     }
 }
-if($Module -contains "Teams"){
+if($Module -contains "MicrosoftTeams"){
     usainstallModule -modulerequested "MicrosoftTeams" -doupdate $Update
     }
 }

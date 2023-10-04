@@ -7,6 +7,7 @@ Current EventIDs:
 
 			EventID
 			0   : Verbose audit message
+			1   : New UsagiTools Version available on PoSh gallery
 			1001: Azure AD Module was unable to install and import, manual import or reinstall module
 			1002: Exchange Online Module was unable to install and import, manual import or reinstall module
 			1003: Sharepoint Online Module was unable to install and import, manual import or reinstall module

@@ -21,6 +21,7 @@ function usawritelog{
     Version 1.0.0
     EventID
     0   : Verbose audit message
+    1   : New UsagiTools Version Available
     1001: Azure AD Module was unable to install and import, manual import or reinstall module
     1002: Exchange Online Module was unable to install and import, manual import or reinstall module
     1003: Sharepoint Online Module was unable to install and import, manual import or reinstall module
@@ -124,7 +125,7 @@ function usamoduleimport{
         $moduleset
         )
         Write-Output "Attempting import of $modulerequested"
-        $modinstalled = Get-InstalledModule $modulerequested
+        $modinstalled = Get-Module $modulerequested -ListAvailable
         if($null -eq $modinstalled -or $modinstalled -eq ""){
             $Choices = @("Yes","No")
             $installmod = $Host.UI.PromptForChoice("Install Module?","Module $modulerequested not found, proceed with installation?",$Choices,1)

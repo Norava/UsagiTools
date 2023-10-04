@@ -26,6 +26,7 @@ function Add-UsaUserSendasGlobally{
 
     .PARAMETER RemoveStaleEntries
         Removes any users from the current set of permissions who aren't found in the existing pulled list of permissions, useful for when these entry lookups don't match with curent data (Like when a User changes their name)
+
     .EXAMPLE
         PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
 
@@ -166,7 +167,7 @@ function Set-UsaDynamicGroupMember{
     .PARAMETER Group
         List of Distribution Lists or Security Groups to nest in said group
 
-     .PARAMETER OutputPath
+    .PARAMETER OutputPath
         Path to output list of users exported, will not export if no path is provided
 
     .PARAMETER SearchString
@@ -175,7 +176,7 @@ function Set-UsaDynamicGroupMember{
     .PARAMETER Users
         List of users to directly add to group
 
-     .PARAMETER UserOU
+    .PARAMETER UserOU
         OU to take all AD User Objects from in DN format
 
     .EXAMPLE
@@ -232,8 +233,6 @@ function Set-UsaDynamicGroupMember{
         $ModImport = usamoduleimport -modulerequested "ActiveDirectory" -moduleset ActiveDirectory
     }
     until($ModImport -le 1)
-
-    usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting AzureAD Login"
     if($ModImport -eq 0){
         usawritelog -LogLevel Error -EventID 2014 -Category NotInstalled -Message "Could not import ActiveDirectory Module please install and try again"
         Break

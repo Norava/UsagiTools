@@ -28,6 +28,7 @@ function usawritelog{
     Version 1.0.0
     EventID
     0   : Verbose audit message
+    1   : New UsagiTools Version Available
     1001: Azure AD Module was unable to install and import, manual import or reinstall module
     1002: Exchange Online Module was unable to install and import, manual import or reinstall module
     1003: Sharepoint Online Module was unable to install and import, manual import or reinstall module
@@ -131,7 +132,7 @@ function usamoduleimport{
         $moduleset
         )
         Write-Output "Attempting import of $modulerequested"
-        $modinstalled = Get-InstalledModule $modulerequested
+        $modinstalled = Get-Module $modulerequested -ListAvailable
         if($null -eq $modinstalled -or $modinstalled -eq ""){
             $Choices = @("Yes","No")
             $installmod = $Host.UI.PromptForChoice("Install Module?","Module $modulerequested not found, proceed with installation?",$Choices,1)
@@ -415,6 +416,7 @@ function Add-UsaUserSendasGlobally{
 
     .PARAMETER RemoveStaleEntries
         Removes any users from the current set of permissions who aren't found in the existing pulled list of permissions, useful for when these entry lookups don't match with curent data (Like when a User changes their name)
+
     .EXAMPLE
         PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
 
@@ -555,7 +557,7 @@ function Set-UsaDynamicGroupMember{
     .PARAMETER Group
         List of Distribution Lists or Security Groups to nest in said group
 
-     .PARAMETER OutputPath
+    .PARAMETER OutputPath
         Path to output list of users exported, will not export if no path is provided
 
     .PARAMETER SearchString
@@ -564,7 +566,7 @@ function Set-UsaDynamicGroupMember{
     .PARAMETER Users
         List of users to directly add to group
 
-     .PARAMETER UserOU
+    .PARAMETER UserOU
         OU to take all AD User Objects from in DN format
 
     .EXAMPLE
@@ -621,8 +623,6 @@ function Set-UsaDynamicGroupMember{
         $ModImport = usamoduleimport -modulerequested "ActiveDirectory" -moduleset ActiveDirectory
     }
     until($ModImport -le 1)
-
-    usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Attempting AzureAD Login"
     if($ModImport -eq 0){
         usawritelog -LogLevel Error -EventID 2014 -Category NotInstalled -Message "Could not import ActiveDirectory Module please install and try again"
         Break
@@ -1209,8 +1209,8 @@ function Install-UsaOffice365Module{
 
 Param
 (
-    [ValidateSet("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","Teams")]
-    [string[]]$Module=("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","Teams"),
+    [ValidateSet("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","MicrosoftTeams")]
+    [string[]]$Module=("AzureAD","ExchangeOnline","MSOnline","SharePoint","SharePointPnP","MicrosoftTeams"),
     [switch]$Update
 )
 
@@ -1248,7 +1248,7 @@ if($Module -contains "SharePointPnP"){
         usawritelog -LogLevel SuccessAudit -EventID 0 -Message "SharePointPnP Module already installed, Skipping"
     }
 }
-if($Module -contains "Teams"){
+if($Module -contains "MicrosoftTeams"){
     usainstallModule -modulerequested "MicrosoftTeams" -doupdate $Update
     }
 }
@@ -1601,4 +1601,9 @@ finally{
         usawritelog -Message "Could not create UsagiTools Event source in Event Viewer, potential errors with logging to the Event Viewer may occur" -LogLevel Warning -EventID 0001
         }
     }
+$LatestVer = Find-Module UsagiTools -ErrorAction SilentlyContinue
+$CurrentVer = Get-Module -ListAvailable UsagiTools | Sort-Object Version
+if($Currentver[-1].Version -lt $LatestVer.Version){
+    usawritelog -LogLevel Warning -EventID 1 -Message $("New Version of UsagiTools is available, please run Update-Module UsagiTools as an admin  to update your version " + $CurrentVer[-1].Version + " to " + $LatestVer.Version)
+}
 }
