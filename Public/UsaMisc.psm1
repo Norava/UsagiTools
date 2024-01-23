@@ -834,8 +834,6 @@ $Computer,
     $Credential = [System.Management.Automation.PSCredential]::Empty,
 [switch]$LiveStats
 )
-
-
 function addtoTable{
     Param
         (
@@ -862,23 +860,27 @@ function addtoTable{
 #Create Base Table
 $BaseTable  =  @()
 
+Write-Host "Gathering VMs, Please Wait"
 #Loop through $Computer object
 $Computer | %{
+   Write-Host "Gathering $_"
 #Determine if they're a cluster object or not
-        icm -ComputerName $_ -ScriptBlock {Get-VM} | %{
+        icm -ComputerName $_ -ScriptBlock {Get-VM | select *} | %{#Write-Host "VM $($_.Name)"
+           #Start-Sleep -s 5
             $TRow = addtoTable `
-                -VMHost $_.ComputerHost`
+                -VMHost $_.ComputerName`
                 -Name $_.Name`
                 -IP $(($_ | select -ExpandProperty NetworkAdapters).IPAddresses | ?{$_ -notlike "fe80*" -and $null -ne $_ -and $_ -ne "127.0.0.1"}) `
                 -CPU $_.ProcessorCount `
-                -RAM $_.MemoryStartup `
-                -MinimumRAM $_.MemoryMinimum `
-                -MaximumRAM $_.MemoryMaximum `
-                -DiskProv $(($T[0]  | select -ExpandProperty HardDrives |select ComputerName,Path | %{$Path = $_.Path
+                -RAM $($_.MemoryStartup / 1GB) `
+                -MinimumRAM $($_.MemoryMinimum / 1GB)`
+                -MaximumRAM $($_.MemoryMaximum / 1GB) `
+                -DiskProv $(($_  | select -ExpandProperty HardDrives |select ComputerName,Path | %{$Path = $_.Path
                     icm -ComputerName $_.ComputerName -ScriptBlock {get-vhd $using:Path}}) | select @{l="Disk";e={$_.Path.split('\')[-1]}},@{label="Size";expression={$_.Size / 1GB}})
-            
+            $BaseTable += $TRow
         }
 
+        $BaseTable
 
     }
 
