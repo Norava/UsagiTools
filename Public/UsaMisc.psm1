@@ -806,3 +806,80 @@ function Test-UsaNetwork{
     }until($Upcount -eq $Count )
     usawritelog -LogLevel Information -EventID 1020 -Message $($Start + "`n" + $BaseTable)
 }
+
+function Get-UsaVMReport{
+    <#
+    .SYNOPSIS
+        Gets VMs from a list of hosts or Hyper-V Clusters along with their Name,Host,CPU Count, RAM (And Dynamic Sizes), Disk Sizes, and attempts to get the IPs of VMs if possible
+    .PARAMETER Computer
+        Comma Seperated List of all hosts to run this against (REQUIRED)
+    .PARAMETER Credentials
+        PSCredential Object to use to perform tests
+    .PARAMETER LiveStats
+        Checks current in use statistics
+    .EXAMPLE
+        PS> Get-UsaVMReport -Hosts s-cluster
+    .EXAMPLE
+        PS> Test-UsaNetwork -Internal 10.0.0.3,10.0.0.4:443,web,web:8080 -External google.com,microsoft.com,lifehacker.com:443,34.34.34.34
+    .EXAMPLE
+        PS> Test-UsaNetwork -Gateway 10.0.0.1 -DNS 10.0.0.20,10.0.0.21
+    .NOTES
+     Version 1.0.0
+#>
+Param
+(
+$Computer,
+[System.Management.Automation.PSCredential]
+[ValidateNotNull()]
+    $Credential = [System.Management.Automation.PSCredential]::Empty,
+[switch]$LiveStats
+)
+
+
+function addtoTable{
+    Param
+        (
+            [string]$VMHost,
+            [string]$Name,
+            [ipaddress]$IP,
+            [string]$CPUCount,
+            [string]$RAM,
+            [string]$MinimumRAM,
+            [string]$MaximumRAM,
+            [string]$DiskProv
+        )
+        $TableRow =New-Object PSObject
+        $TableRow | Add-Member  -Type NoteProperty -Name "VMHost" -Value $VMHost
+        $TableRow | Add-Member  -Type NoteProperty -Name "Name" -Value $Name
+        $TableRow | Add-Member  -Type NoteProperty -Name "IP" -Value $IP
+        $TableRow | Add-Member  -Type NoteProperty -Name "CPU" -Value $CPUCount
+        $TableRow | Add-Member  -Type NoteProperty -Name "RAM(GB)" -Value $RAM
+        $TableRow | Add-Member  -Type NoteProperty -Name "MinimumRAM(GB)" -Value $MinimumRAM
+        $TableRow | Add-Member  -Type NoteProperty -Name "MaximumRAM(GB)" -Value $MaximumRAM
+        $TableRow | Add-Member  -Type NoteProperty -Name "DiskProv" -Value $DiskProv
+        return $TableRow
+}
+#Create Base Table
+$BaseTable  =  @()
+
+#Loop through $Computer object
+$Computer | %{
+#Determine if they're a cluster object or not
+        icm -ComputerName $_ -ScriptBlock {Get-VM} | %{
+            $TRow = addtoTable `
+                -VMHost $_.ComputerHost`
+                -Name $_.Name`
+                -IP $(($_ | select -ExpandProperty NetworkAdapters).IPAddresses | ?{$_ -notlike "fe80*" -and $null -ne $_ -and $_ -ne "127.0.0.1"}) `
+                -CPU $_.ProcessorCount `
+                -RAM $_.MemoryStartup `
+                -MinimumRAM $_.MemoryMinimum `
+                -MaximumRAM $_.MemoryMaximum `
+                -DiskProv $(($T[0]  | select -ExpandProperty HardDrives |select ComputerName,Path | %{$Path = $_.Path
+                    icm -ComputerName $_.ComputerName -ScriptBlock {get-vhd $using:Path}}) | select @{l="Disk";e={$_.Path.split('\')[-1]}},@{label="Size";expression={$_.Size / 1GB}})
+            
+        }
+
+
+    }
+
+}
