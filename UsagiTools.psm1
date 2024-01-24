@@ -23,7 +23,7 @@ function usawritelog{
     .PARAMETER RecommendedAction
         Adds Write-Error's Recommened action as needed
     .EXAMPLE
-        PS> usamoduleimport -modulerequested ExchangeOnline -moduleset O365
+        PS> usawritelog Message "This is a message" -LogLevel -Information -EventID 0
     .NOTES
     Version 1.0.0
     EventID
@@ -140,7 +140,7 @@ function usamoduleimport{
             #If we want to install the module install based off the ModuleSet
                 switch ($moduleset) {
                     O365 { Install-UsaOffice365Module -Module $modulerequested }
-                    ActiveDirectory {Install-WindowsFeature -Name "RSAT-AD-PowerShell" -IncludeAllSubFeature } 
+                    ActiveDirectory {Install-WindowsFeature -Name "RSAT-AD-PowerShell" -IncludeAllSubFeature }
                     Default {}
                 }
             #Attempt to import the newly Downloaded Module
@@ -414,9 +414,6 @@ function Add-UsaUserSendasGlobally{
     .PARAMETER AddSharedMailboxes
         Adds permissions to all Shared Mailboxes
 
-    .PARAMETER RemoveStaleEntries
-        Removes any users from the current set of permissions who aren't found in the existing pulled list of permissions, useful for when these entry lookups don't match with curent data (Like when a User changes their name)
-
     .EXAMPLE
         PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
 
@@ -442,8 +439,7 @@ function Add-UsaUserSendasGlobally{
     [string[]]
     $AzureEnvironmentName = "AzureCloud",
     [switch]$AddDistributionGroups,
-    [switch]$AddSharedMailboxes,
-    [switch]$RemoveStaleEntries
+    [switch]$AddSharedMailboxes
 
     )
 
@@ -460,33 +456,33 @@ function Add-UsaUserSendasGlobally{
 
     #Create our base object of recipients using get-msoluser for a 100x or more speed increase, this will be slightly less accurate during the cleanup phase of this object but will ultimately take the whole cmdlet down to a few minutes with 1000 users after initial run provided recipient objects in your environment MOSTLY match the "Name" property with the "Display Name" Property
     [System.Collections.ArrayList]$Recipients = Get-MsolUser -All | Where-Object{$_.IsLicensed -eq $true -and $($_.Licenses.ServiceStatus | Where-Object{$_.ServicePlan.ServiceName -match "EXCHANGE"}).ProvisioningStatus -match "success"}
-    
+
     #Add any Distribution Groups that are active if flagged to the same Recipients table above with modified Key names for select variables to have a single consistent object for easy looping
     if($AddDistributionGroups){
-        Get-DistributionGroup -Filter * | ForEach-Object { 
+        Get-DistributionGroup -Filter * | ForEach-Object {
             $Recipients.Add([PSCustomObject]@{'DisplayName'=$_.Name; 'UserPrincipalName' = $_.PrimarySMTPAddress; 'ObjectID'=$_.ExternalDirectoryObjectId})
         } | Out-Null
     }
-    
+
     #Add any Shared Mailboxes that are active if flagged to the same Recipients table above with modified Key names for select Variables to have a single consistent object for easy looping
     if($AddSharedMailboxes){
         Get-Mailbox -GroupMailbox -RecipientTypeDetails GroupMailbox,RoomMailbox,SchedulingMailbox,SharedMailbox  -Filter * | ForEach-Object {
             $Recipients.Add([PSCustomObject]@{'DisplayName'=$_.Name; 'UserPrincipalName' = $_.PrimarySMTPAddress; 'ObjectID'=$_.ExternalDirectoryObjectId})
         } | Out-Null
     }
-    
+
     usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Gathering current Trustee $Trustee permissions, this may take awhile"
     #Get all current perms for users
     $CurrentPerms = Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited | Sort-Object Identity
-    
+
     #Take all users in CurrentPerms and remove them from the Users Object so we don't push duplicate permissions
     usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Cleaning Permission Object"
     $CurrentPerms | ForEach-Object{
         #For each user check if it's in the Users Object locally and save that as a value
-    
+
         #Get the object from our $Users MSOnline based object if it exists, due to varying Identity vales checks  DisplayName, ObjectID, SamAccountName,  UserPrincipalName
         $usertoremove = $_.Identity
-    
+
         #Search through our recipients list to find any users who are already validly permissed objects. Clean up and research twice on Displayname as some objects in the $CurrentPerms object on Add will have two spaces in the DisplayName that cmdlets used for $Recipients lacks
         $Remove = $Recipients | Where-Object{$_.DisplayName -like "$usertoremove" -OR `
                                             $_.ObjectID -eq "$usertoremove" -OR  `
@@ -494,7 +490,7 @@ function Add-UsaUserSendasGlobally{
                                             $_.UserPrincipalName -like $usertoremove -OR `
                                             $_.DisplayName.replace("  "," ") -like $usertoremove
                                 }
-    
+
         #If Remove object contains our user to remove remove them from their respective tables
         if($($Remove | Measure-Object).Count -eq 1){ #Remove object from list
             $Recipients.Remove($Remove)
@@ -508,7 +504,7 @@ function Add-UsaUserSendasGlobally{
                 $Remove = $Recipients | Where-Object{$_.ObjectID -like $SecondStageRemove.ExternalDirectoryObjectId}
                 $Recipients.Remove($Remove)
             }
-            #Otherwise we can assume there may be issue with the obect permission and can alert the user to rerun with -RemoveStaleEntries to remove it, this MAY fix the issue but 
+            #Otherwise we can assume there may be issue with the obect permission and can alert the user to rerun with -RemoveStaleEntries to remove it, this MAY fix the issue but
             else{
                 usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove not found in active recipients, please run with the -RemoveStaleEntries flag to attempt to remove if invalid and rebuild if stale"
             }
@@ -520,7 +516,7 @@ function Add-UsaUserSendasGlobally{
         }
         #If for some reason multiple objects come back note them to disregard
         elseif($($Remove | Measure-Object).Count -ge 2){
-            usawritelog -LogLevel Warning -EventID 2002 -Message $("Multiple potential Receipients are listed in existing permissions for $Trustee. Will attempt to readd to gurantee all objects have permissions. Consider manually removing permissions from the following and rerunning script to have permissions be added as GUIDS 
+            usawritelog -LogLevel Warning -EventID 2002 -Message $("Multiple potential Receipients are listed in existing permissions for $Trustee. Will attempt to readd to gurantee all objects have permissions. Consider manually removing permissions from the following and rerunning script to have permissions be added as GUIDS
             "+ $Remove)
         }
         #Standard "Stuff broke please tell me" message
@@ -630,7 +626,7 @@ function Set-UsaDynamicGroupMember{
         #Module imported lets go
     else{
         #Validate Params are correct
-        
+
         #Check that Identity group exists, if not terminate
         $IdentityObject = get-adgroup $Identity
         if($null -eq $IdentityObject -or $IdentityObject -eq ""){
@@ -1341,7 +1337,7 @@ function Test-UsaNetwork{
     }
     #Build a default object for internal paths to test against
     $Adapter = Get-NetIPConfiguration | Where-Object {$_.IPv4Address.IPAddress -like $SourceAddress}
-    
+
     if($null -eq $Adapter){
             usawritelog -LogLevel Error -EventID 1022 -Category ConnectionError -Message $("ERROR: Cannot locate Adapter with source address " + $SourceAddress + " Please rerun with valid source address") -RecommendedAction "Rerun with a -Source $IP where IP is a valid address for a local network adapter to ping from"
             break
@@ -1582,6 +1578,129 @@ function Test-UsaNetwork{
     $UpCount ++
     }until($Upcount -eq $Count )
     usawritelog -LogLevel Information -EventID 1020 -Message $($Start + "`n" + $BaseTable)
+}
+
+function Get-UsaVMReport{
+    <#
+    .SYNOPSIS
+        Gets VMs from a list of hosts or Hyper-V Clusters along with their Name,Host,CPU Count, RAM (And Dynamic Sizes), Disk Sizes, and attempts to get the IPs of VMs if possible
+    .PARAMETER Computer
+        Comma Seperated List of all hosts to run this against (REQUIRED)
+    .PARAMETER Credentials
+        PSCredential Object to use to perform tests
+    .PARAMETER LiveStats
+        Checks current in use statistics
+    .EXAMPLE
+        PS> Get-UsaVMReport -Hosts s-cluster
+    .EXAMPLE
+        PS> Get-UsaVMReport -Hosts HST-01,HST-02,HST-03 -LiveStats
+    .NOTES
+     Version 1.0.0
+#>
+Param
+(
+$Computer,
+[System.Management.Automation.PSCredential]
+[ValidateNotNull()]
+    $Credential = [System.Management.Automation.PSCredential]::Empty,
+[switch]$LiveStats
+)
+function addtoTable{
+    Param
+        (
+            [string]$VMHost,
+            [string]$Name,
+            [ipaddress]$IP,
+            [string]$CPUCount,
+            [string]$CPUUsage,
+            [string]$RAM,
+            [string]$RAMUsage,
+            [string]$MemoryPressure,
+            [string]$MinimumRAM,
+            [string]$MaximumRAM,
+            $DiskProv,
+            [switch]$LiveStats
+        )
+        $TableRow =New-Object PSObject
+        $TableRow | Add-Member  -Type NoteProperty -Name "VMHost" -Value $VMHost
+        $TableRow | Add-Member  -Type NoteProperty -Name "Name" -Value $Name
+        $TableRow | Add-Member  -Type NoteProperty -Name "CPU" -Value $CPUCount
+        $TableRow | Add-Member  -Type NoteProperty -Name "RAM(GB)" -Value $RAM
+        switch ($LiveStats){
+            true {
+                $TableRow | Add-Member  -Type NoteProperty -Name "CPU Usage" -Value $CPUUsage
+                $TableRow | Add-Member  -Type NoteProperty -Name "RAM(GB Used)" -Value $RAMUsage
+                $TableRow | Add-Member  -Type NoteProperty -Name "MemPres(%)" -Value $MemoryPressure
+                $TableRow | Add-Member  -Type NoteProperty -Name "DiskProv" -Value $DiskProv
+            }
+            Default {
+                $TableRow | Add-Member  -Type NoteProperty -Name "MinimumRAM(GB)" -Value $MinimumRAM
+                $TableRow | Add-Member  -Type NoteProperty -Name "MaximumRAM(GB)" -Value $MaximumRAM
+                $TableRow | Add-Member  -Type NoteProperty -Name "DiskProv" -Value $DiskProv
+            }
+        }
+        $TableRow | Add-Member  -Type NoteProperty -Name "IP" -Value $IP
+        return $TableRow
+}
+#Create Base Table
+$BaseTable  =  @()
+
+usawritelog -EventID 0 -LogLevel Information -Message "Gathering VMs from hosts, Please Wait"
+#Loop through $Computer object
+$Computer | ForEach-Object{
+    usawritelog -EventID 0 -LogLevel Information -Message "Gathering $_"
+#Determine if we're pulling livve stats
+        if($LiveStats) {
+            if($Credential -ne [System.Management.Automation.PSCredential]::Empty -and $Credential -ne ""){
+                    $VMs = Invoke-Command -ComputerName $_ -Credential $Credential -ScriptBlock {Get-VM | Select-Object *}
+            }
+            else{
+                    $VMs = Invoke-Command -ComputerName $_ -ScriptBlock {Get-VM | Select-Object *}
+            }
+            $VMs | ForEach-Object{
+                    $TRow = addtoTable `
+                        -LiveStats `
+                        -VMHost $_.ComputerName `
+                        -Name $_.Name `
+                        -IP $(($_ | Select-Object -ExpandProperty NetworkAdapters).IPAddresses | Where-Object{$_ -notlike "fe80*" -and $null -ne $_ -and $_ -ne "127.0.0.1"}) `
+                        -CPUCount $_.ProcessorCount `
+                        -RAM $([math]::Round($($_.MemoryStartup / 1GB),2)) `
+                        -CPUUsage $_.CPUUsage `
+                        -RAMUsage $([math]::Round($($_.MemoryAssigned / 1GB),2)) `
+                        -MemoryPressure $((get-counter  $("\\"+$_.ComputerName+"\hyper-v dynamic memory vm("+$_.VMName+")\average pressure")).CounterSamples.CookedValue) `
+                        -DiskProv $(($_  | Select-Object -ExpandProperty HardDrives |Select-Object ComputerName,Path | ForEach-Object{$Path = $_.Path
+                            Invoke-Command -ComputerName $_.ComputerName -ScriptBlock {get-vhd $using:Path}}) | Select-Object @{l="Disk";e={$_.Path.split('\')[-1]}},@{l="CurrentSize";e={$([math]::Round($($_.FileSize / 1GB),2))}},@{label="MaxSize";expression={$([math]::Round($($_.Size / 1GB),2))}})
+                    $BaseTable += $TRow
+                }
+        }
+            else {
+                if($Credential -ne [System.Management.Automation.PSCredential]::Empty -and $Credential -ne ""){
+                        $VMs = Invoke-Command -ComputerName $_ -Credential $Credential -ScriptBlock {Get-VM | Select-Object *}
+                }
+                else {
+                        $VMs = Invoke-Command -ComputerName $_ -ScriptBlock {Get-VM | Select-Object *}
+                }
+            $VMs | ForEach-Object{
+                $TRow = addtoTable `
+                        -VMHost $_.ComputerName`
+                        -Name $_.Name`
+                        -IP $(($_ | Select-Object -ExpandProperty NetworkAdapters).IPAddresses | Where-Object{$_ -notlike "fe80*" -and $null -ne $_ -and $_ -ne "127.0.0.1"}) `
+                        -CPUCount $_.ProcessorCount `
+                        -RAM $([math]::Round($($_.MemoryStartup / 1GB),2)) `
+                        -MinimumRAM $([math]::Round($($_.MemoryMinimum / 1GB),2))`
+                        -MaximumRAM $([math]::Round($($_.MemoryMaximum / 1GB),2)) `
+                        -DiskProv $(($_  | Select-Object -ExpandProperty HardDrives |Select-Object ComputerName,Path | ForEach-Object{$Path = $_.Path
+                            Invoke-Command -ComputerName $_.ComputerName -ScriptBlock {get-vhd $using:Path}}) | Select-Object @{l="Disk";e={$_.Path.split('\')[-1]}},@{label="MaxSize";expression={$([math]::Round($($_.Size / 1GB),2))}})
+                    $BaseTable += $TRow
+                }
+        }
+
+
+
+
+
+    }
+ return $BaseTable
 }
 
 try{

@@ -16,7 +16,7 @@ function usawritelog{
     .PARAMETER RecommendedAction
         Adds Write-Error's Recommened action as needed
     .EXAMPLE
-        PS> usamoduleimport -modulerequested ExchangeOnline -moduleset O365
+        PS> usawritelog Message "This is a message" -LogLevel -Information -EventID 0
     .NOTES
     Version 1.0.0
     EventID
@@ -133,7 +133,7 @@ function usamoduleimport{
             #If we want to install the module install based off the ModuleSet
                 switch ($moduleset) {
                     O365 { Install-UsaOffice365Module -Module $modulerequested }
-                    ActiveDirectory {Install-WindowsFeature -Name "RSAT-AD-PowerShell" -IncludeAllSubFeature } 
+                    ActiveDirectory {Install-WindowsFeature -Name "RSAT-AD-PowerShell" -IncludeAllSubFeature }
                     Default {}
                 }
             #Attempt to import the newly Downloaded Module

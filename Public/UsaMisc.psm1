@@ -564,7 +564,7 @@ function Test-UsaNetwork{
     }
     #Build a default object for internal paths to test against
     $Adapter = Get-NetIPConfiguration | Where-Object {$_.IPv4Address.IPAddress -like $SourceAddress}
-    
+
     if($null -eq $Adapter){
             usawritelog -LogLevel Error -EventID 1022 -Category ConnectionError -Message $("ERROR: Cannot locate Adapter with source address " + $SourceAddress + " Please rerun with valid source address") -RecommendedAction "Rerun with a -Source $IP where IP is a valid address for a local network adapter to ping from"
             break
@@ -806,3 +806,129 @@ function Test-UsaNetwork{
     }until($Upcount -eq $Count )
     usawritelog -LogLevel Information -EventID 1020 -Message $($Start + "`n" + $BaseTable)
 }
+<<<<<<< Updated upstream
+=======
+
+function Get-UsaVMReport{
+    <#
+    .SYNOPSIS
+        Gets VMs from a list of hosts or Hyper-V Clusters along with their Name,Host,CPU Count, RAM (And Dynamic Sizes), Disk Sizes, and attempts to get the IPs of VMs if possible
+    .PARAMETER Computer
+        Comma Seperated List of all hosts to run this against (REQUIRED)
+    .PARAMETER Credentials
+        PSCredential Object to use to perform tests
+    .PARAMETER LiveStats
+        Checks current in use statistics
+    .EXAMPLE
+        PS> Get-UsaVMReport -Hosts s-cluster
+    .EXAMPLE
+        PS> Get-UsaVMReport -Hosts HST-01,HST-02,HST-03 -LiveStats
+    .NOTES
+     Version 1.0.0
+#>
+Param
+(
+$Computer,
+[System.Management.Automation.PSCredential]
+[ValidateNotNull()]
+    $Credential = [System.Management.Automation.PSCredential]::Empty,
+[switch]$LiveStats
+)
+function addtoTable{
+    Param
+        (
+            [string]$VMHost,
+            [string]$Name,
+            [ipaddress]$IP,
+            [string]$CPUCount,
+            [string]$CPUUsage,
+            [string]$RAM,
+            [string]$RAMUsage,
+            [string]$MemoryPressure,
+            [string]$MinimumRAM,
+            [string]$MaximumRAM,
+            $DiskProv,
+            [switch]$LiveStats
+        )
+        $TableRow =New-Object PSObject
+        $TableRow | Add-Member  -Type NoteProperty -Name "VMHost" -Value $VMHost
+        $TableRow | Add-Member  -Type NoteProperty -Name "Name" -Value $Name
+        $TableRow | Add-Member  -Type NoteProperty -Name "CPU" -Value $CPUCount
+        $TableRow | Add-Member  -Type NoteProperty -Name "RAM(GB)" -Value $RAM
+        switch ($LiveStats){
+            true {
+                $TableRow | Add-Member  -Type NoteProperty -Name "CPU Usage" -Value $CPUUsage
+                $TableRow | Add-Member  -Type NoteProperty -Name "RAM(GB Used)" -Value $RAMUsage
+                $TableRow | Add-Member  -Type NoteProperty -Name "MemPres(%)" -Value $MemoryPressure
+                $TableRow | Add-Member  -Type NoteProperty -Name "DiskProv" -Value $DiskProv
+            }
+            Default {
+                $TableRow | Add-Member  -Type NoteProperty -Name "MinimumRAM(GB)" -Value $MinimumRAM
+                $TableRow | Add-Member  -Type NoteProperty -Name "MaximumRAM(GB)" -Value $MaximumRAM
+                $TableRow | Add-Member  -Type NoteProperty -Name "DiskProv" -Value $DiskProv
+            }
+        }
+        $TableRow | Add-Member  -Type NoteProperty -Name "IP" -Value $IP
+        return $TableRow
+}
+#Create Base Table
+$BaseTable  =  @()
+
+usawritelog -EventID 0 -LogLevel Information -Message "Gathering VMs from hosts, Please Wait"
+#Loop through $Computer object
+$Computer | ForEach-Object{
+    usawritelog -EventID 0 -LogLevel Information -Message "Gathering $_"
+#Determine if we're pulling livve stats
+        if($LiveStats) {
+            if($Credential -ne [System.Management.Automation.PSCredential]::Empty -and $Credential -ne ""){
+                    $VMs = Invoke-Command -ComputerName $_ -Credential $Credential -ScriptBlock {Get-VM | Select-Object *}
+            }
+            else{
+                    $VMs = Invoke-Command -ComputerName $_ -ScriptBlock {Get-VM | Select-Object *}
+            }
+            $VMs | ForEach-Object{
+                    $TRow = addtoTable `
+                        -LiveStats `
+                        -VMHost $_.ComputerName `
+                        -Name $_.Name `
+                        -IP $(($_ | Select-Object -ExpandProperty NetworkAdapters).IPAddresses | Where-Object{$_ -notlike "fe80*" -and $null -ne $_ -and $_ -ne "127.0.0.1"}) `
+                        -CPUCount $_.ProcessorCount `
+                        -RAM $([math]::Round($($_.MemoryStartup / 1GB),2)) `
+                        -CPUUsage $_.CPUUsage `
+                        -RAMUsage $([math]::Round($($_.MemoryAssigned / 1GB),2)) `
+                        -MemoryPressure $((get-counter  $("\\"+$_.ComputerName+"\hyper-v dynamic memory vm("+$_.VMName+")\average pressure")).CounterSamples.CookedValue) `
+                        -DiskProv $(($_  | Select-Object -ExpandProperty HardDrives |Select-Object ComputerName,Path | ForEach-Object{$Path = $_.Path
+                            Invoke-Command -ComputerName $_.ComputerName -ScriptBlock {get-vhd $using:Path}}) | Select-Object @{l="Disk";e={$_.Path.split('\')[-1]}},@{l="CurrentSize";e={$([math]::Round($($_.FileSize / 1GB),2))}},@{label="MaxSize";expression={$([math]::Round($($_.Size / 1GB),2))}})
+                    $BaseTable += $TRow
+                }
+        }
+            else {
+                if($Credential -ne [System.Management.Automation.PSCredential]::Empty -and $Credential -ne ""){
+                        $VMs = Invoke-Command -ComputerName $_ -Credential $Credential -ScriptBlock {Get-VM | Select-Object *}
+                }
+                else {
+                        $VMs = Invoke-Command -ComputerName $_ -ScriptBlock {Get-VM | Select-Object *}
+                }
+            $VMs | ForEach-Object{
+                $TRow = addtoTable `
+                        -VMHost $_.ComputerName`
+                        -Name $_.Name`
+                        -IP $(($_ | Select-Object -ExpandProperty NetworkAdapters).IPAddresses | Where-Object{$_ -notlike "fe80*" -and $null -ne $_ -and $_ -ne "127.0.0.1"}) `
+                        -CPUCount $_.ProcessorCount `
+                        -RAM $([math]::Round($($_.MemoryStartup / 1GB),2)) `
+                        -MinimumRAM $([math]::Round($($_.MemoryMinimum / 1GB),2))`
+                        -MaximumRAM $([math]::Round($($_.MemoryMaximum / 1GB),2)) `
+                        -DiskProv $(($_  | Select-Object -ExpandProperty HardDrives |Select-Object ComputerName,Path | ForEach-Object{$Path = $_.Path
+                            Invoke-Command -ComputerName $_.ComputerName -ScriptBlock {get-vhd $using:Path}}) | Select-Object @{l="Disk";e={$_.Path.split('\')[-1]}},@{label="MaxSize";expression={$([math]::Round($($_.Size / 1GB),2))}})
+                    $BaseTable += $TRow
+                }
+        }
+
+
+
+
+
+    }
+ return $BaseTable
+}
+>>>>>>> Stashed changes

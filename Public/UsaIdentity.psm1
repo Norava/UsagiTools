@@ -24,9 +24,6 @@ function Add-UsaUserSendasGlobally{
     .PARAMETER AddSharedMailboxes
         Adds permissions to all Shared Mailboxes
 
-    .PARAMETER RemoveStaleEntries
-        Removes any users from the current set of permissions who aren't found in the existing pulled list of permissions, useful for when these entry lookups don't match with curent data (Like when a User changes their name)
-
     .EXAMPLE
         PS> Add-UsaUserSendasGlobally -Trustee CRM@contoso.net
 
@@ -52,8 +49,7 @@ function Add-UsaUserSendasGlobally{
     [string[]]
     $AzureEnvironmentName = "AzureCloud",
     [switch]$AddDistributionGroups,
-    [switch]$AddSharedMailboxes,
-    [switch]$RemoveStaleEntries
+    [switch]$AddSharedMailboxes
 
     )
 
@@ -70,33 +66,33 @@ function Add-UsaUserSendasGlobally{
 
     #Create our base object of recipients using get-msoluser for a 100x or more speed increase, this will be slightly less accurate during the cleanup phase of this object but will ultimately take the whole cmdlet down to a few minutes with 1000 users after initial run provided recipient objects in your environment MOSTLY match the "Name" property with the "Display Name" Property
     [System.Collections.ArrayList]$Recipients = Get-MsolUser -All | Where-Object{$_.IsLicensed -eq $true -and $($_.Licenses.ServiceStatus | Where-Object{$_.ServicePlan.ServiceName -match "EXCHANGE"}).ProvisioningStatus -match "success"}
-    
+
     #Add any Distribution Groups that are active if flagged to the same Recipients table above with modified Key names for select variables to have a single consistent object for easy looping
     if($AddDistributionGroups){
-        Get-DistributionGroup -Filter * | ForEach-Object { 
+        Get-DistributionGroup -Filter * | ForEach-Object {
             $Recipients.Add([PSCustomObject]@{'DisplayName'=$_.Name; 'UserPrincipalName' = $_.PrimarySMTPAddress; 'ObjectID'=$_.ExternalDirectoryObjectId})
         } | Out-Null
     }
-    
+
     #Add any Shared Mailboxes that are active if flagged to the same Recipients table above with modified Key names for select Variables to have a single consistent object for easy looping
     if($AddSharedMailboxes){
         Get-Mailbox -GroupMailbox -RecipientTypeDetails GroupMailbox,RoomMailbox,SchedulingMailbox,SharedMailbox  -Filter * | ForEach-Object {
             $Recipients.Add([PSCustomObject]@{'DisplayName'=$_.Name; 'UserPrincipalName' = $_.PrimarySMTPAddress; 'ObjectID'=$_.ExternalDirectoryObjectId})
         } | Out-Null
     }
-    
+
     usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Gathering current Trustee $Trustee permissions, this may take awhile"
     #Get all current perms for users
     $CurrentPerms = Get-RecipientPermission -Trustee $Trustee -ResultSize Unlimited | Sort-Object Identity
-    
+
     #Take all users in CurrentPerms and remove them from the Users Object so we don't push duplicate permissions
     usawritelog -LogLevel SuccessAudit -EventID 0 -Message "Cleaning Permission Object"
     $CurrentPerms | ForEach-Object{
         #For each user check if it's in the Users Object locally and save that as a value
-    
+
         #Get the object from our $Users MSOnline based object if it exists, due to varying Identity vales checks  DisplayName, ObjectID, SamAccountName,  UserPrincipalName
         $usertoremove = $_.Identity
-    
+
         #Search through our recipients list to find any users who are already validly permissed objects. Clean up and research twice on Displayname as some objects in the $CurrentPerms object on Add will have two spaces in the DisplayName that cmdlets used for $Recipients lacks
         $Remove = $Recipients | Where-Object{$_.DisplayName -like "$usertoremove" -OR `
                                             $_.ObjectID -eq "$usertoremove" -OR  `
@@ -104,7 +100,7 @@ function Add-UsaUserSendasGlobally{
                                             $_.UserPrincipalName -like $usertoremove -OR `
                                             $_.DisplayName.replace("  "," ") -like $usertoremove
                                 }
-    
+
         #If Remove object contains our user to remove remove them from their respective tables
         if($($Remove | Measure-Object).Count -eq 1){ #Remove object from list
             $Recipients.Remove($Remove)
@@ -118,7 +114,7 @@ function Add-UsaUserSendasGlobally{
                 $Remove = $Recipients | Where-Object{$_.ObjectID -like $SecondStageRemove.ExternalDirectoryObjectId}
                 $Recipients.Remove($Remove)
             }
-            #Otherwise we can assume there may be issue with the obect permission and can alert the user to rerun with -RemoveStaleEntries to remove it, this MAY fix the issue but 
+            #Otherwise we can assume there may be issue with the obect permission and can alert the user to rerun with -RemoveStaleEntries to remove it, this MAY fix the issue but
             else{
                 usawritelog -LogLevel Warning -EventID 2001 -Message "$usertoremove not found in active recipients, please run with the -RemoveStaleEntries flag to attempt to remove if invalid and rebuild if stale"
             }
@@ -130,7 +126,7 @@ function Add-UsaUserSendasGlobally{
         }
         #If for some reason multiple objects come back note them to disregard
         elseif($($Remove | Measure-Object).Count -ge 2){
-            usawritelog -LogLevel Warning -EventID 2002 -Message $("Multiple potential Receipients are listed in existing permissions for $Trustee. Will attempt to readd to gurantee all objects have permissions. Consider manually removing permissions from the following and rerunning script to have permissions be added as GUIDS 
+            usawritelog -LogLevel Warning -EventID 2002 -Message $("Multiple potential Receipients are listed in existing permissions for $Trustee. Will attempt to readd to gurantee all objects have permissions. Consider manually removing permissions from the following and rerunning script to have permissions be added as GUIDS
             "+ $Remove)
         }
         #Standard "Stuff broke please tell me" message
@@ -240,7 +236,7 @@ function Set-UsaDynamicGroupMember{
         #Module imported lets go
     else{
         #Validate Params are correct
-        
+
         #Check that Identity group exists, if not terminate
         $IdentityObject = get-adgroup $Identity
         if($null -eq $IdentityObject -or $IdentityObject -eq ""){
